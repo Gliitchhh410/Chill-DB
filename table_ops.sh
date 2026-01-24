@@ -60,7 +60,7 @@ case $COMMAND in
                 exit 1
             fi
 
-            if [ -f "./data/$DB_NAME/$TABLE_NAME.csv" ]; then
+            if [ ! -f "./data/$DB_NAME/$TABLE_NAME.csv" ]; then
                 echo "Error: Table $TABLE_NAME does not exist"
                 exit 1
             fi
