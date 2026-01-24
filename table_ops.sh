@@ -3,7 +3,7 @@
 COMMAND=$1
 DB_NAME=$2
 TABLE_NAME=$3
-COLUMNS=$4
+COLS=$4
 
 
 if [ ! -d "./data" ]; then
@@ -13,8 +13,8 @@ fi
 
 case $COMMAND in 
         "create")
-            if [[ -z "$DB_NAME" || -z "$TABLE_NAME" || -z "$COLUMNS" ]]; then
-                echo "Error: Usage: ./table_ops.sh create <db_name> <table_name> <columns>"
+            if [[ -z "$DB_NAME" || -z "$TABLE_NAME" || -z "$COLS" ]]; then
+                echo "Error: Usage: ./table_ops.sh create <db_name> <table_name> <COLS>"
                 exit 1
             fi
 
@@ -31,7 +31,7 @@ case $COMMAND in
 
             touch "./data/$DB_NAME/$TABLE_NAME.csv"
 
-            echo "$COLUMNS" > "./data/$DB_NAME/$TABLE_NAME.meta"
+            echo "$COLS" > "./data/$DB_NAME/$TABLE_NAME.meta"
             touch "./data/$DB_NAME/$TABLE_NAME.pk"
             echo "Table '$TABLE_NAME' created successfully."
             exit 0
