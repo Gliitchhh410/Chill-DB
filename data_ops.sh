@@ -65,8 +65,29 @@ case $COMMAND in
             exit 0
             ;;
             
-        *)
-            echo "Error: Unknown command $COMMAND"
-            exit 1
+        "delete")
+            PK_VALUE=$4
+
+            if [ -z "$PK_VALUE" ]; then
+                echo "Error: Usage: ./data_ops.sh delete <db> <table> <pk>"
+                exit 1
+            fi
+
+
+            if ! grep -q "^$PK_VALUE," "$TABLE_FILE"; then
+                echo "Error: Record with ID $PK_VALUE not found"
+                exit 1
+            fi
+
+            awk -F, -v pk ="$PK_VALUE" '$1 !=pk' "$TABLE_FILE">"$TABLE_FILE.tmp" && mv "$TABLE_FILE.tmp" "$TABLE_FILE"
+            echo "Record deleted successfully."
+            exit 0
             ;;
+
+
+
+
+
+
+            
 esac
