@@ -24,6 +24,12 @@ type InsertRequest struct{
 	Values 			string `json:"values"`
 }
 
+type SelectRequest struct{
+	DBName		  string `json:"db_name"`
+	TableName 	 string `json:"table_name"`
+	PKValue 		string `json:"pk_value"` // Optional: If empty, selects all
+}
+
 func main() {
 	http.HandleFunc("/databases", listDatabases)
 
@@ -32,6 +38,8 @@ func main() {
 	http.HandleFunc("/table/create", createTable)
 
 	http.HandleFunc("/data/insert", insertRow)
+
+	http.HandleFunc("/data/query", queryTable)
 
 	fmt.Println("🚀 Server is running on http://localhost:8080 ...")
 	err := http.ListenAndServe(":8080", nil)
@@ -148,4 +156,35 @@ func insertRow(w http.ResponseWriter, r * http.Request){
 
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "Success: %s", string(output))
+}
+
+
+
+func queryTable(w http.ResponseWriter, r *http.Request){
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only Post method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SelectRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+
+	if err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if req.DBName == "" || req.TableName == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+
+	cmd := exec.Command("./data_ops.sh", "select", req.DBName, req.TableName, req.PKValue)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		http.Error(w, string(output), http.StatusNotFound)
+		return
+	}
+
+	fmt.Fprintf(w, string(output))
 }
