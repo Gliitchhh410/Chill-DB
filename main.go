@@ -17,12 +17,21 @@ type TableRequest struct {
 	Columns   string `json:"columns"` // e.g., "id:int,name:string"
 }
 
+
+type InsertRequest struct{
+	DBName 	    string `json:"db_name"`
+	TableName  string `json:"table_name"`
+	Values 			string `json:"values"`
+}
+
 func main() {
-	http.HandleFunc("/database", listDatabases)
+	http.HandleFunc("/databases", listDatabases)
 
 	http.HandleFunc("/database/create", createDatabase)
 
 	http.HandleFunc("/table/create", createTable)
+
+	http.HandleFunc("/data/insert", insertRow)
 
 	fmt.Println("🚀 Server is running on http://localhost:8080 ...")
 	err := http.ListenAndServe(":8080", nil)
@@ -100,6 +109,39 @@ func createTable(w http.ResponseWriter, r *http.Request) {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, "Success: %s", string(output))
+}
+
+
+
+func insertRow(w http.ResponseWriter, r * http.Request){
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only Post method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req InsertRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+
+	if err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if req.DBName == "" || req.TableName == "" || req.Values == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+
+	cmd := exec.Command("./data_ops.sh", "insert", req.DBName, req.TableName, req.Values)
+	output, err:= cmd.CombinedOutput()
+
+	if err != nil{
 		http.Error(w, string(output), http.StatusInternalServerError)
 		return
 	}
