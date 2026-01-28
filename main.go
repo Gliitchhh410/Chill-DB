@@ -1,20 +1,22 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os/exec"
 )
 
+type DBRequest struct {
+	Name string `json:"name"`
+}
+
 func main() {
-	http.HandleFunc("/databases", listDatabases)
+	http.HandleFunc("/database", listDatabases)
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "Welcome to Chill-DB! Visit /databases to see your data.")
-	})
+	http.HandleFunc("/database/create", createDatabase)
 
-	fmt.Println("Server is running on port 8080...")
-
+	fmt.Println("🚀 Server is running on http://localhost:8080 ...")
 	err := http.ListenAndServe(":8080", nil)
 
 	if err != nil {
@@ -34,4 +36,35 @@ func listDatabases(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, string(output))
+}
+
+func createDatabase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DBRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		http.Error(w, "Database name is required", http.StatusBadRequest)
+		return
+	}
+
+	cmd := exec.Command("./db_ops.sh", "create", req.Name)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusCreated) // HTTP 201 Created
+	fmt.Fprintf(w, "Success: %s", string(output))
 }
