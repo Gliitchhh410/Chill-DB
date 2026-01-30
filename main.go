@@ -99,6 +99,12 @@ func createDatabase(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Database name is required", http.StatusBadRequest)
 		return
 	}
+	for _, char := range req.Name {
+		if char == ' ' {
+			http.Error(w, "Database names cannot contain spaces", http.StatusBadRequest)
+			return
+		}
+	}
 
 	cmd := exec.Command("./scripts/db_ops.sh", "create", req.Name)
 	output, err := cmd.CombinedOutput()
