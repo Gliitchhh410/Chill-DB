@@ -11,6 +11,14 @@ type DBRequest struct {
 	Name string `json:"name"`
 }
 
+type DBDropRequest struct {
+	Name string `json:"name"`
+}
+
+type TableDropRequest struct {
+	DBName    string `json:"db_name"`
+	TableName string `json:"table_name"`
+}
 type TableRequest struct {
 	DBName    string `json:"db_name"`
 	TableName string `json:"table_name"`
@@ -51,6 +59,10 @@ func main() {
 	http.HandleFunc("/databases", listDatabases)
 
 	http.HandleFunc("/database/create", createDatabase)
+
+	http.HandleFunc("/database/delete", dropDatabase)
+
+	http.HandleFunc("/table/delete", dropTable)
 
 	http.HandleFunc("/tables", listTables)
 
@@ -295,9 +307,68 @@ func listTables(w http.ResponseWriter, r *http.Request) {
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-        http.Error(w, string(output), http.StatusInternalServerError)
-        return
-    }
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, string(output))
+}
+
+func dropDatabase(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DBDropRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+	cmd := exec.Command("./scripts/db_ops.sh", "drop", req.Name)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, string(output))
+
+}
+
+func dropTable(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req TableDropRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.DBName == "" || req.TableName == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+	cmd := exec.Command("./scripts/table_ops.sh", "drop", req.DBName, req.TableName)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
 
 	fmt.Fprintf(w, string(output))
 }

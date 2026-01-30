@@ -57,16 +57,21 @@ async function fetchDatabases(){
         dbListContainer.innerHTML = ''
 
 
-        databases.forEach(db => {
-            const item = document.createElement("div")
-            item.className = 'p-3 hover:bg-gray-700 cursor-pointer rounded text-gray-300 text-sm font-medium transition-colors mb-1'
-            item.textContent = `📂 ${ db.slice(0,-1)}`
-
-            item.onclick= () => {
-                fetchTables(db)
-            }
-
-            dbListContainer.appendChild(item)
+        databases.forEach(dbName => {
+            const item = document.createElement('div');
+            item.className = 'p-3 hover:bg-gray-700 cursor-pointer rounded text-gray-300 text-sm font-medium transition-colors mb-1 flex justify-between items-center group';
+            
+            item.innerHTML = `
+                <span onclick="fetchTables('${dbName}')" class="flex-1 flex items-center">
+                    📂 <span class="ml-2">${dbName.slice(0,-1)}</span>
+                </span>
+                
+                <button onclick="dropDatabase('${dbName}')" class="text-gray-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition px-2">
+                    ✕
+                </button>
+            `;
+            
+            dbListContainer.appendChild(item);
         });
     } catch (e){
         console.error(`Error fetching the databases: ${e}`);
@@ -129,7 +134,7 @@ async function fetchTables(dbName){
                             <p class="text-xs text-gray-500">Table</p>
                         </div>
                     </div>
-                    <button onclick="event.stopPropagation(); deleteTable('${dbName}', '${tableName}')" 
+                    <button onclick="event.stopPropagation(); dropTable('${dbName}', '${tableName}')" 
                             class="text-red-500 opacity-0 group-hover:opacity-100 hover:text-red-400 transition p-1">
                         🗑️
                     </button>
@@ -453,6 +458,64 @@ function createTable(dbName) {
                     }
                 });
             }, 300); 
+        }
+    });
+}
+
+function dropTable(dbName, tableName) {
+    Modal.open({
+        title: 'Delete Table?',
+        msg: `Are you sure you want to delete table '${tableName}'? All data will be lost.`,
+        onConfirm: async () => {
+            try {
+                const response = await fetch('/table/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        db_name: dbName,
+                        table_name: tableName
+                    })
+                });
+
+                const result = await response.text();
+
+                if (response.ok) {
+                    fetchTables(dbName); 
+                } else {
+                    alert("Error: " + result);
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Failed to connect.");
+            }
+        }
+    });
+}
+
+function dropDatabase(dbName) {
+    Modal.open({
+        title: 'Delete Database?',
+        msg: `WARNING: You are about to delete '${dbName}' and ALL its tables. This cannot be undone.`,
+        onConfirm: async () => {
+            try {
+                const response = await fetch('/database/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: dbName })
+                });
+
+                const result = await response.text();
+
+                if (response.ok) {
+                    fetchDatabases(); 
+                    document.getElementById('main-view').innerHTML = '';
+                } else {
+                    alert("Error: " + result);
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Failed to connect.");
+            }
         }
     });
 }
