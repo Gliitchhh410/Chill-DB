@@ -52,10 +52,17 @@ type DeleteRequest struct {
 	PKValue   string `json:"pk_value"`
 }
 
+type SQLRequest struct {
+	DBName string `json:"db_name"`
+	Query  string `json:"query"`
+}
+
 func main() {
 	fs := http.FileServer(http.Dir("./frontend"))
 	http.Handle("/", fs)
 
+
+	http.HandleFunc("/sql", handleSQL)
 	http.HandleFunc("/databases", listDatabases)
 
 	http.HandleFunc("/database/create", createDatabase)
@@ -371,4 +378,30 @@ func dropTable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, string(output))
+}
+
+
+
+func handleSQL(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req SQLRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Printf("Processing SQL: %s (DB: %s)\n", req.Query, req.DBName)
+
+	result, err := ExecuteSQL(req.DBName, req.Query)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	fmt.Fprint(w, result)
 }
