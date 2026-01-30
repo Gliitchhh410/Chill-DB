@@ -21,7 +21,7 @@ if [[ ! -d "./data/$DB_NAME" ]]; then
 fi
 
 if [[ ! -f "$TABLE_FILE" ]]; then
-    echo "Error: Database '$TABLE_NAME' does not exist."
+    echo "Error: Table '$TABLE_NAME' does not exist."
     exit 1
 fi
 
@@ -29,23 +29,36 @@ fi
 case $COMMAND in 
         "insert")
             VALUES=$4
-             if [ -z "$VALUES" ]; then
+
+            
+            if [ -z "$VALUES" ]; then
                 echo "Error: Usage: ./data_ops.sh insert <db_name> <table_name> <values>"
+                exit 1
+            fi
+
+
+            EXPECTED_COLS=$(awk -F',' '{print NF}' "$META_FILE")
+            ACTUAL_COLS=$(echo "$VALUES" | awk -F',' '{print NF}')
+
+            if [ "$EXPECTED_COLS" -ne "$ACTUAL_COLS" ]; then
+            echo "Error: Column count mismatch. Table expects $EXPECTED_COLS columns, but you provided $ACTUAL_COLS."
+            exit 1
+            fi
+
+            PK_VALUE=$(echo "$VALUES" | cut -d',' -f1)
+
+            if grep -q "^$PK_VALUE\(,\|$\)" "$TABLE_FILE"; then
+                echo "Error: Primary Key '$PK_VALUE' already exists."
                 exit 1
             fi
 
             PK_VALUE=$(echo "$VALUES" | cut -d',' -f1)
 
 
-            if grep -q "^$PK_VALUE," "$TABLE_FILE"; then
-                echo "Error: Primary Key '$PK_VALUE' already exists."
-                exit 1
-            fi
-
             echo "$VALUES" >> "$TABLE_FILE"
-            echo "Row inserted successfully"
-            exit 0
-            ;; 
+                echo "Row inserted successfully"
+                exit 0
+            ;;
 
 
         "select")
@@ -115,7 +128,13 @@ case $COMMAND in
                 exit 1
             fi
 
-            if ! grep -q "^$PK_VALUE," "$TABLE_FILE"; then
+            # FIX: Prevent updating the Primary Key
+            if [ "$COL_NUM" -eq 1 ]; then
+                echo "Error: You cannot update the Primary Key column."
+                exit 1
+            fi
+
+            if ! grep -q "^$PK_VALUE\(,\|$\)" "$TABLE_FILE"; then
                 echo "Error: Record with ID '$PK_VALUE' not found."
                 exit 1
             fi

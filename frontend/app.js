@@ -1,6 +1,47 @@
 const dbListContainer = document.getElementById("db-list")
 let currentDB = null;
+const Modal = {
+    overlay: document.getElementById('modal-overlay'),
+    title: document.getElementById('modal-title'),
+    message: document.getElementById('modal-message'),
+    input: document.getElementById('modal-input'),
+    btnConfirm: document.getElementById('modal-confirm'),
+    btnCancel: document.getElementById('modal-cancel'),
 
+    open: function({ title, msg, showInput = false, onConfirm }) {
+        this.title.textContent = title;
+        this.message.textContent = msg;
+        
+
+        if (showInput) {
+            this.input.classList.remove('hidden');
+            this.input.value = ''; 
+            this.input.focus();   
+        } else {
+            this.input.classList.add('hidden');
+        }
+
+        this.overlay.classList.remove('hidden');
+
+   
+        this.btnCancel.onclick = () => {
+            this.close();
+        };
+
+        this.btnConfirm.onclick = () => {
+            const inputValue = this.input.value;
+
+            if (showInput && !inputValue.trim()) return;
+            
+            this.close();
+            onConfirm(inputValue); 
+        };
+    },
+
+    close: function() {
+        this.overlay.classList.add('hidden');
+    }
+};
 
 async function fetchDatabases(){
     try {
@@ -275,67 +316,67 @@ async function handleInsert(dbName, tableName) {
 
 
 
-async function deleteRow(dbName, tableName, pkValue) {
+function deleteRow(dbName, tableName, pkValue) {
 
-    if (!confirm(`Are you sure you want to delete ID ${pkValue}?`)) {
-        return; 
-    }
-
-    try {
-        const response = await fetch('/data/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                db_name: dbName,
-                table_name: tableName,
-                pk_value: pkValue
-            })
-        });
-
-        const result = await response.text();
-
-        if (response.ok) {
-            fetchTableData(dbName, tableName);
-        } else {
-            alert("Error: " + result);
+    Modal.open({
+        title: 'Delete Row?',
+        msg: `Are you sure you want to permanently delete ID "${pkValue}"? This action cannot be undone.`,
+        showInput: false, 
+        onConfirm: async () => {
+            try {
+                const response = await fetch('/data/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        db_name: dbName,
+                        table_name: tableName,
+                        pk_value: pkValue
+                    })
+                });
+                
+                if (response.ok) {
+                    fetchTableData(dbName, tableName);
+                } else {
+                    const err = await response.text();
+                    alert("Error: " + err); 
+                }
+            } catch (error) {
+                console.error(error);
+            }
         }
-
-    } catch (error) {
-        console.error("Delete failed:", error);
-        alert("Failed to connect to server.");
-    }
+    });
 }
 
 
-async function promptInsertRow(dbName, tableName) {
+function promptInsertRow(dbName, tableName) {
 
-    const values = prompt(`Enter values for ${tableName} (comma separated):`);
+    Modal.open({
+        title: 'Add New Row',
+        msg: `Enter values for ${tableName} (comma separated, e.g., "5,Sarah"):`,
+        showInput: true, 
+        onConfirm: async (inputValue) => {
+            try {
+                const response = await fetch('/data/insert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        db_name: dbName,
+                        table_name: tableName,
+                        values: inputValue
+                    })
+                });
 
-    if (!values) return;
-
-    try {
-        const response = await fetch('/data/insert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                db_name: dbName,
-                table_name: tableName,
-                values: values
-            })
-        });
-
-        const result = await response.text();
-
-        if (response.ok) {
-            fetchTableData(dbName, tableName);
-        } else {
-            alert("Error: " + result);
+                if (response.ok) {
+                    fetchTableData(dbName, tableName);
+                } else {
+                    const err = await response.text();
+                    alert("Error: " + err);
+                }
+            } catch (error) {
+                console.error(error);
+            }
         }
-
-    } catch (error) {
-        console.error("Insert failed:", error);
-        alert("Failed to connect to server.");
-    }
+    });
 }
 
 fetchDatabases()
