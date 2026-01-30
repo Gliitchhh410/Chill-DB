@@ -70,7 +70,7 @@ func main() {
 
 func listDatabases(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received request for /databases")
-	cmd := exec.Command("./db_ops.sh", "list")
+	cmd := exec.Command("./scripts/db_ops.sh", "list")
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -100,7 +100,7 @@ func createDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./db_ops.sh", "create", req.Name)
+	cmd := exec.Command("./scripts/db_ops.sh", "create", req.Name)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -131,7 +131,7 @@ func createTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./table_ops.sh", "create", req.DBName, req.TableName, req.Columns)
+	cmd := exec.Command("./scripts/table_ops.sh", "create", req.DBName, req.TableName, req.Columns)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -162,7 +162,7 @@ func insertRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./data_ops.sh", "insert", req.DBName, req.TableName, req.Values)
+	cmd := exec.Command("./scripts/data_ops.sh", "insert", req.DBName, req.TableName, req.Values)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -193,7 +193,7 @@ func queryTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./data_ops.sh", "select", req.DBName, req.TableName, req.ColumnName, req.Value)
+	cmd := exec.Command("./scripts/data_ops.sh", "select", req.DBName, req.TableName, req.ColumnName, req.Value)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, string(output), http.StatusNotFound)
@@ -222,7 +222,7 @@ func updateRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./data_ops.sh", "update", req.DBName, req.TableName, req.PKValue, req.Column, req.Value)
+	cmd := exec.Command("./scripts/data_ops.sh", "update", req.DBName, req.TableName, req.PKValue, req.Column, req.Value)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -250,7 +250,7 @@ func deleteRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./data_ops.sh", "delete", req.DBName, req.TableName, req.PKValue)
+	cmd := exec.Command("./scripts/data_ops.sh", "delete", req.DBName, req.TableName, req.PKValue)
 
 	output, err := cmd.CombinedOutput()
 
