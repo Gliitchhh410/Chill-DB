@@ -16,7 +16,7 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 	if strings.HasPrefix(upperQuery, "SELECT") {
 		return parseSelect(dbName, query)
 	} else if strings.HasPrefix(upperQuery, "INSERT") {
-		return "", errors.New("INSERT command is under construction")
+		return parseInsert(dbName, query)
 	} else if strings.HasPrefix(upperQuery, "DELETE") {
 		return "", errors.New("DELETE command is under construction")
 	}
@@ -24,6 +24,36 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 	return "", fmt.Errorf("unknown command: %s", query)
 }
 
+func parseInsert(dbName string, query string) (string, error) {
+	re := regexp.MustCompile(`(?i)^INSERT\s+INTO\s+(\w+)\s+VALUES\s*\((.+)\)$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(query))
+
+	if len(matches) < 3 {
+		return "", fmt.Errorf("syntax error. usage: INSERT INTO <table> VALUES (v1, v2...)")
+	}
+
+	tableName := matches[1]
+	rawValues := matches[2]
+
+	parts := strings.Split(rawValues, ",")
+	var cleanParts []string
+
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		p = strings.Trim(p, "'\"")
+		cleanParts = append(cleanParts, p)
+	}
+
+	finalValues := strings.Join(cleanParts, ",")
+	cmd := exec.Command("./scripts/data_ops.sh", "insert", dbName, tableName, finalValues)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return "", fmt.Errorf("system error: %s", string(output))
+	}
+
+	return "Row inserted successfully", nil
+}
 func parseSelect(dbName string, query string) (string, error) {
 	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
@@ -36,7 +66,7 @@ func parseSelect(dbName string, query string) (string, error) {
 	tableName := strings.TrimSpace(matches[2])
 
 	var filterCol, filterVal string
-	if len(matches) == 5{
+	if len(matches) == 5 {
 		filterCol = strings.TrimSpace(matches[3])
 		filterVal = strings.TrimSpace(matches[4])
 		filterVal = strings.Trim(filterVal, "'\"")
