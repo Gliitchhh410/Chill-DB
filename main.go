@@ -24,9 +24,10 @@ type InsertRequest struct {
 }
 
 type SelectRequest struct {
-	DBName    string `json:"db_name"`
-	TableName string `json:"table_name"`
-	PKValue   string `json:"pk_value"` // Optional: If empty, selects all
+	DBName     string `json:"db_name"`
+	TableName  string `json:"table_name"`
+	ColumnName string `json:"column"` // Optional
+	Value      string `json:"value"`  // Optional
 }
 
 type UpdateRequest struct {
@@ -37,7 +38,7 @@ type UpdateRequest struct {
 	Value     string `json:"value"`
 }
 
-type DeleteRequest struct{
+type DeleteRequest struct {
 	DBName    string `json:"db_name"`
 	TableName string `json:"table_name"`
 	PKValue   string `json:"pk_value"`
@@ -57,7 +58,6 @@ func main() {
 	http.HandleFunc("/data/update", updateRow)
 
 	http.HandleFunc("/data/delete", deleteRow)
-
 
 	fmt.Println("🚀 Server is running on http://localhost:8080 ...")
 	err := http.ListenAndServe(":8080", nil)
@@ -193,7 +193,7 @@ func queryTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./data_ops.sh", "select", req.DBName, req.TableName, req.PKValue)
+	cmd := exec.Command("./data_ops.sh", "select", req.DBName, req.TableName, req.ColumnName, req.Value)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		http.Error(w, string(output), http.StatusNotFound)
@@ -203,18 +203,16 @@ func queryTable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(output))
 }
 
-
-func updateRow(w http.ResponseWriter, r *http.Request){
-	if r.Method != http.MethodPost{
+func updateRow(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var req UpdateRequest 
-
+	var req UpdateRequest
 
 	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil{
+	if err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
@@ -224,8 +222,7 @@ func updateRow(w http.ResponseWriter, r *http.Request){
 		return
 	}
 
-
-	cmd:= exec.Command("./data_ops.sh", "update", req.DBName, req.TableName, req.PKValue, req.Column, req.Value)
+	cmd := exec.Command("./data_ops.sh", "update", req.DBName, req.TableName, req.PKValue, req.Column, req.Value)
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -236,8 +233,7 @@ func updateRow(w http.ResponseWriter, r *http.Request){
 	fmt.Fprintf(w, "Success: %s", string(output))
 }
 
-
-func deleteRow(w http.ResponseWriter, r *http.Request){
+func deleteRow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
 		return
@@ -249,7 +245,7 @@ func deleteRow(w http.ResponseWriter, r *http.Request){
 		return
 	}
 
-	if req.DBName == "" || req.PKValue == "" || req.TableName== ""{
+	if req.DBName == "" || req.PKValue == "" || req.TableName == "" {
 		http.Error(w, "Missing fields", http.StatusBadRequest)
 		return
 	}
