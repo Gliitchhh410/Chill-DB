@@ -25,7 +25,7 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 }
 
 func parseSelect(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)$`)
+	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {
@@ -34,7 +34,14 @@ func parseSelect(dbName string, query string) (string, error) {
 
 	columnsStr := strings.TrimSpace(matches[1])
 	tableName := strings.TrimSpace(matches[2])
-	cmd := exec.Command("./scripts/data_ops.sh", "select", dbName, tableName, "", "")
+
+	var filterCol, filterVal string
+	if len(matches) == 5{
+		filterCol = strings.TrimSpace(matches[3])
+		filterVal = strings.TrimSpace(matches[4])
+		filterVal = strings.Trim(filterVal, "'\"")
+	}
+	cmd := exec.Command("./scripts/data_ops.sh", "select", dbName, tableName, filterCol, filterVal)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("system error: %s", string(output))
