@@ -1,4 +1,5 @@
 const dbListContainer = document.getElementById("db-list")
+const sqlInput = document.getElementById('sql-input');
 let currentDB = null;
 const Modal = {
     overlay: document.getElementById('modal-overlay'),
@@ -519,4 +520,68 @@ function dropDatabase(dbName) {
         }
     });
 }
+
+sqlInput.addEventListener("keypress", async (e)=>{
+    if (e.key === "Enter"){
+        const query = sqlInput.value.trim()
+        if (!query) return
+
+        sqlInput.disabled = true
+
+        await executeSQL(query)
+        sqlInput.disabled = false;
+        sqlInput.focus();
+    }
+})
+
+async function executeSQL(query){
+    const activeDB = currentDB
+
+    if (!activeDB) return
+
+    try {
+        const response = await fetch('/sql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                db_name: activeDB,
+                query: query
+            })
+        });
+        const result = await response.text()
+
+        if (response.ok) {
+            // Success! 
+            // If it's a SELECT (returns CSV), we render the grid.
+            if (query.toUpperCase().startsWith("SELECT")) {
+                renderSQLResult(activeDB, result);
+            } else {
+                // If it's INSERT/DELETE, just show success
+                alert("Success: " + result);
+                // And refresh the current table if we are looking at one
+                if (currentTable) fetchTableData(activeDB, currentTable);
+            }
+        } else {
+            alert("SQL Error: " + result);
+        }
+    }catch (e){
+        console.error(error);
+        alert("System Error: Failed to connect.");
+    }
+}
+
+
+function renderSQLResult(dbName, csvData){
+    if (!csvData.trim()) {
+        alert("Query returned no results.");
+        return;
+    }
+    const rows = csvData.trim().split('\n').map(line => line.split(','));
+    renderDataGrid(dbName, "SQL Result", rows);
+}
+
+
+
+
+
 fetchDatabases()
