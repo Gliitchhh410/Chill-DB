@@ -49,19 +49,28 @@ case $COMMAND in
 
 
         "select")
-            PK_VALUE=$4
+            COL_NAME=$4
+            SEARCH_VAL=$5
 
-            if [ -z "$PK_VALUE" ]; then
+            if [ -z "$COL_NAME" ]; then
                 cat "$TABLE_FILE"
-            else 
-                RESULT=$(grep "^$PK_VALUE," "$TABLE_FILE")
-                if [ -z "$RESULT" ]; then
-                    echo "Error: Record not found"
-                    exit 1
-                else
-                    echo "$RESULT"
-                fi
+                exit 0
             fi
+
+            COL_NUM=$(awk -F, -v col="$COL_NAME" '{
+                for(i=1;i<=NF;i++){
+                    gsub(/[ \t\r\n]+$/, "", $i) 
+                    split($i, def, ":");
+                    if(def[1] == col) print i;
+                    }
+            }' "$META_FILE")
+
+            if [ -z "$COL_NUM" ]; then
+                echo "Error: Column '$COL_NAME' not found"
+                exit 1
+            fi
+
+            awk -F, -v c="$COL_NUM" -v v="$SEARCH_VAL" '$c == v' "$TABLE_FILE"
             exit 0
             ;;
             
