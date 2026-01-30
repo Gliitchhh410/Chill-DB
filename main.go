@@ -45,6 +45,9 @@ type DeleteRequest struct {
 }
 
 func main() {
+	fs := http.FileServer(http.Dir("./frontend"))
+	http.Handle("/", fs)
+
 	http.HandleFunc("/databases", listDatabases)
 
 	http.HandleFunc("/database/create", createDatabase)
