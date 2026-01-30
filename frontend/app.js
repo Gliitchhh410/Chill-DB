@@ -103,7 +103,7 @@ async function fetchTables(dbName){
             <h2 class="text-2xl font-bold text-white flex items-center">
                 <span class="text-blue-400 mr-2">📂</span> ${dbName.slice(0,-1) }
             </h2>
-            <button onclick="promptCreateTable()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition">
+            <button onclick="createTable('${dbName}')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition">
                 + New Table
             </button>
         `;
@@ -410,4 +410,50 @@ function createDatabase() {
     });
 }
 
+
+
+function createTable(dbName) {
+    Modal.open({
+        title: 'Create New Table',
+        msg: 'Step 1: Enter the Table Name:',
+        showInput: true,
+        onConfirm: (tableName) => {
+            if (!tableName) return;
+
+            setTimeout(() => {
+                Modal.open({
+                    title: 'Define Columns',
+                    msg: `Step 2: Enter columns for '${tableName}' (e.g., id:int,name:string):`,
+                    showInput: true,
+                    onConfirm: async (columns) => {
+                        if (!columns) return;
+                        
+                        try {
+                            const response = await fetch('/table/create', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    db_name: dbName,
+                                    table_name: tableName,
+                                    columns: columns
+                                })
+                            });
+
+                            const result = await response.text();
+
+                            if (response.ok) {
+                                fetchTables(dbName); 
+                            } else {
+                                alert("Error: " + result);
+                            }
+                        } catch (error) {
+                            console.error(error);
+                            alert("Failed to connect.");
+                        }
+                    }
+                });
+            }, 300); 
+        }
+    });
+}
 fetchDatabases()
