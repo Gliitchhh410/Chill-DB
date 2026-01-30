@@ -61,7 +61,6 @@ func main() {
 	fs := http.FileServer(http.Dir("./frontend"))
 	http.Handle("/", fs)
 
-
 	http.HandleFunc("/sql", handleSQL)
 	http.HandleFunc("/databases", listDatabases)
 
@@ -87,7 +86,7 @@ func main() {
 	err := http.ListenAndServe(":8080", nil)
 
 	if err != nil {
-		fmt.Println("Error starting the server", nil)
+		fmt.Println("Error starting the server", err)
 	}
 
 }
@@ -379,8 +378,6 @@ func dropTable(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, string(output))
 }
-
-
 
 func handleSQL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
