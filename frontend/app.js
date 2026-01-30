@@ -77,7 +77,6 @@ async function fetchTables(dbName){
 
         tables.forEach(tableName => {
             const card = document.createElement('div');
-            // Tailwind: dark bg, border, hover effect
             card.className = 'bg-gray-800 border border-gray-700 p-4 rounded-lg hover:border-blue-500 transition cursor-pointer group relative';
 
             card.innerHTML = `
@@ -97,7 +96,7 @@ async function fetchTables(dbName){
             `;
 
             // Click to view data (Future Step)
-            card.onclick = () => alert(`Viewing data for ${tableName} (Coming Soon)`);
+            card.onclick = () => fetchTableData(dbName, tableName);
 
             grid.appendChild(card);
         });
@@ -110,5 +109,126 @@ async function fetchTables(dbName){
     }
 }
 
+
+async function fetchTableData(dbName, tableName){
+    const mainView = document.getElementById('main-view')
+
+    mainView.innerHTML = `
+        <div class="flex flex-col items-center justify-center h-full text-gray-400">
+            <div class="animate-pulse mb-4 text-4xl">📄</div>
+            <p>Reading ${tableName}...</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch('/data/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                db_name: dbName, 
+                table_name: tableName,
+                column: "", 
+                value: "" 
+            })
+        });
+
+        const text = await response.text();
+        
+        if (!text || text.trim() === "") {
+            renderEmptyTableState(dbName, tableName);
+            return;
+        }
+
+        const rows = text.split('\n')
+            .filter(row => row.trim() !== '')
+            .map(row => row.split(','));
+
+        renderDataGrid(dbName, tableName, rows);
+
+    } catch (error) {
+        console.error(error);
+        mainView.innerHTML = `<div class="text-red-500 p-4">Error loading data: ${error.message}</div>`;
+    }
+}
+
+function renderDataGrid(dbName, tableName, rows) {
+    const mainView = document.getElementById('main-view');
+    mainView.innerHTML = '';
+
+    // Header with "Back" button
+    const header = document.createElement('div');
+    header.className = 'mb-4 flex items-center justify-between';
+    header.innerHTML = `
+        <div class="flex items-center">
+            <button onclick="fetchTables('${dbName}')" class="text-gray-400 hover:text-white mr-4 transition">
+                ← Back
+            </button>
+            <h2 class="text-xl font-bold text-blue-400">${tableName}</h2>
+            <span class="ml-3 text-xs text-gray-600 bg-gray-800 px-2 py-1 rounded border border-gray-700">
+                ${rows.length} records
+            </span>
+        </div>
+        <button onclick="promptInsertRow('${dbName}', '${tableName}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition">
+            + Add Row
+        </button>
+    `;
+    mainView.appendChild(header);
+
+    // The Table Container (Scrollable)
+    const tableContainer = document.createElement('div');
+    tableContainer.className = 'overflow-x-auto bg-gray-800 rounded-lg border border-gray-700 shadow-xl';
+
+    let html = `
+        <table class="min-w-full text-left text-sm text-gray-400">
+            <thead class="bg-gray-900 text-gray-200 uppercase font-medium">
+                <tr>
+                    ${rows[0].map((_, i) => `<th class="px-6 py-3">Col ${i + 1}</th>`).join('')}
+                    <th class="px-6 py-3 text-right">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-700">
+    `;
+
+    // Loop through rows
+    rows.forEach(row => {
+        html += `<tr class="hover:bg-gray-750 transition-colors">`;
+        
+        // Data Cells
+        row.forEach(cell => {
+            html += `<td class="px-6 py-4 whitespace-nowrap">${cell}</td>`;
+        });
+
+        // Action Buttons (Delete)
+        // We assume Column 0 is the Primary Key (ID)
+        const pk = row[0]; 
+        html += `
+            <td class="px-6 py-4 text-right">
+                <button onclick="deleteRow('${dbName}', '${tableName}', '${pk}')" 
+                        class="text-red-500 hover:text-red-400 transition ml-4" title="Delete Row">
+                    🗑️
+                </button>
+            </td>
+        </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    tableContainer.innerHTML = html;
+    mainView.appendChild(tableContainer);
+}
+
+function renderEmptyTableState(dbName, tableName) {
+    const mainView = document.getElementById('main-view');
+    mainView.innerHTML = `
+        <div class="flex flex-col h-full">
+            <button onclick="fetchTables('${dbName}')" class="text-left text-gray-400 hover:text-white mb-4">← Back</button>
+            <div class="flex-1 flex flex-col items-center justify-center text-gray-500">
+                <p class="mb-4">Table is empty.</p>
+                <button onclick="promptInsertRow('${dbName}', '${tableName}')" class="text-blue-400 hover:underline">
+                    Add your first row
+                </button>
+            </div>
+        </div>
+    `;
+}
 
 fetchDatabases()
