@@ -17,17 +17,24 @@ type TableRequest struct {
 	Columns   string `json:"columns"` // e.g., "id:int,name:string"
 }
 
-
-type InsertRequest struct{
-	DBName 	    string `json:"db_name"`
-	TableName  string `json:"table_name"`
-	Values 			string `json:"values"`
+type InsertRequest struct {
+	DBName    string `json:"db_name"`
+	TableName string `json:"table_name"`
+	Values    string `json:"values"`
 }
 
-type SelectRequest struct{
-	DBName		  string `json:"db_name"`
-	TableName 	 string `json:"table_name"`
-	PKValue 		string `json:"pk_value"` // Optional: If empty, selects all
+type SelectRequest struct {
+	DBName    string `json:"db_name"`
+	TableName string `json:"table_name"`
+	PKValue   string `json:"pk_value"` // Optional: If empty, selects all
+}
+
+type UpdateRequest struct {
+	DBName    string `json:"db_name"`
+	TableName string `json:"table_name"`
+	PKValue   string `json:"pk_value"`
+	Column    string `json:"column"`
+	Value     string `json:"value"`
 }
 
 func main() {
@@ -40,6 +47,8 @@ func main() {
 	http.HandleFunc("/data/insert", insertRow)
 
 	http.HandleFunc("/data/query", queryTable)
+
+	http.HandleFunc("/data/update", updateRow)
 
 	fmt.Println("🚀 Server is running on http://localhost:8080 ...")
 	err := http.ListenAndServe(":8080", nil)
@@ -125,9 +134,7 @@ func createTable(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Success: %s", string(output))
 }
 
-
-
-func insertRow(w http.ResponseWriter, r * http.Request){
+func insertRow(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only Post method is allowed", http.StatusMethodNotAllowed)
 		return
@@ -147,9 +154,9 @@ func insertRow(w http.ResponseWriter, r * http.Request){
 	}
 
 	cmd := exec.Command("./data_ops.sh", "insert", req.DBName, req.TableName, req.Values)
-	output, err:= cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 
-	if err != nil{
+	if err != nil {
 		http.Error(w, string(output), http.StatusInternalServerError)
 		return
 	}
@@ -158,9 +165,7 @@ func insertRow(w http.ResponseWriter, r * http.Request){
 	fmt.Fprintf(w, "Success: %s", string(output))
 }
 
-
-
-func queryTable(w http.ResponseWriter, r *http.Request){
+func queryTable(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only Post method is allowed", http.StatusMethodNotAllowed)
 		return
@@ -187,4 +192,37 @@ func queryTable(w http.ResponseWriter, r *http.Request){
 	}
 
 	fmt.Fprintf(w, string(output))
+}
+
+
+func updateRow(w http.ResponseWriter, r *http.Request){
+	if r.Method != http.MethodPost{
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req UpdateRequest 
+
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil{
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.DBName == "" || req.TableName == "" || req.PKValue == "" || req.Column == "" || req.Value == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+
+
+	cmd:= exec.Command("./data_ops.sh", "update", req.DBName, req.TableName, req.PKValue, req.Column, req.Value)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Success: %s", string(output))
 }
