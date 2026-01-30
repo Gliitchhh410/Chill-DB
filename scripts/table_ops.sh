@@ -50,8 +50,7 @@ case $COMMAND in
                 exit 1
             fi
 
-            echo "Tables in $DB_NAME: "
-            ls "./data/$DB_NAME"
+            ls "./data/$DB_NAME" | grep "\.csv$" | sed 's/\.csv$//'
             exit 0
             ;;
         "drop")

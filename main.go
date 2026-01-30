@@ -52,6 +52,8 @@ func main() {
 
 	http.HandleFunc("/database/create", createDatabase)
 
+	http.HandleFunc("/tables", listTables)
+
 	http.HandleFunc("/table/create", createTable)
 
 	http.HandleFunc("/data/insert", insertRow)
@@ -270,4 +272,32 @@ func deleteRow(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Success: %s", string(output))
+}
+
+func listTables(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DBRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+	cmd := exec.Command("./scripts/table_ops.sh", "list", req.Name)
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+        http.Error(w, string(output), http.StatusInternalServerError)
+        return
+    }
+
+	fmt.Fprintf(w, string(output))
 }
