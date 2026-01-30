@@ -155,63 +155,72 @@ function renderDataGrid(dbName, tableName, rows) {
     const mainView = document.getElementById('main-view');
     mainView.innerHTML = '';
 
-    // Header with "Back" button
+    // 1. The Header (Title + Add Button)
+    // We use 'flex' to push them apart, and better margins
     const header = document.createElement('div');
-    header.className = 'mb-4 flex items-center justify-between';
+    header.className = 'flex items-center justify-between mb-6 px-1';
     header.innerHTML = `
         <div class="flex items-center">
-            <button onclick="fetchTables('${dbName}')" class="text-gray-400 hover:text-white mr-4 transition">
-                ← Back
+            <button onclick="fetchTables('${dbName}')" class="text-gray-400 hover:text-white mr-4 transition flex items-center">
+                <span class="text-xl mr-1">←</span> Back
             </button>
-            <h2 class="text-xl font-bold text-blue-400">${tableName}</h2>
-            <span class="ml-3 text-xs text-gray-600 bg-gray-800 px-2 py-1 rounded border border-gray-700">
+            <h2 class="text-3xl font-bold text-gray-100 flex items-center tracking-tight">
+                <span class="text-blue-500 mr-3 text-2xl">📄</span> ${tableName}
+            </h2>
+            <span class="ml-4 text-xs font-mono text-blue-300 bg-blue-900 bg-opacity-30 px-2 py-1 rounded border border-blue-800">
                 ${rows.length} records
             </span>
         </div>
-        <button onclick="promptInsertRow('${dbName}', '${tableName}')" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm transition">
+        
+        <button onclick="promptInsertRow('${dbName}', '${tableName}')" 
+                class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-lg transition-transform transform hover:scale-105 active:scale-95">
             + Add Row
         </button>
     `;
     mainView.appendChild(header);
 
-    // The Table Container (Scrollable)
+    // 2. The Table Card (The Container)
+    // This gives it the "Dashboard" look with a distinct background
     const tableContainer = document.createElement('div');
-    tableContainer.className = 'overflow-x-auto bg-gray-800 rounded-lg border border-gray-700 shadow-xl';
+    tableContainer.className = 'bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden';
 
     let html = `
-        <table class="min-w-full text-left text-sm text-gray-400">
-            <thead class="bg-gray-900 text-gray-200 uppercase font-medium">
-                <tr>
-                    ${rows[0].map((_, i) => `<th class="px-6 py-3">Col ${i + 1}</th>`).join('')}
-                    <th class="px-6 py-3 text-right">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-700">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm text-gray-300">
+                <thead class="bg-gray-900 text-gray-400 uppercase font-semibold tracking-wider">
+                    <tr>
+                        ${rows[0].map((_, i) => `<th class="px-6 py-4 border-b border-gray-700">Col ${i + 1}</th>`).join('')}
+                        <th class="px-6 py-4 border-b border-gray-700 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
     `;
 
-    // Loop through rows
+    // 3. The Rows
     rows.forEach(row => {
-        html += `<tr class="hover:bg-gray-750 transition-colors">`;
+        // We assume Column 0 is the ID for the delete button
+        const pk = row[0];
+        
+        html += `<tr class="hover:bg-gray-700 transition-colors duration-150 group">`;
         
         // Data Cells
         row.forEach(cell => {
-            html += `<td class="px-6 py-4 whitespace-nowrap">${cell}</td>`;
+            html += `<td class="px-6 py-4 whitespace-nowrap group-hover:text-white">${cell}</td>`;
         });
 
-        // Action Buttons (Delete)
-        // We assume Column 0 is the Primary Key (ID)
-        const pk = row[0]; 
+        // Delete Button (Only visible on hover)
         html += `
-            <td class="px-6 py-4 text-right">
+            <td class="px-6 py-4 text-right whitespace-nowrap">
                 <button onclick="deleteRow('${dbName}', '${tableName}', '${pk}')" 
-                        class="text-red-500 hover:text-red-400 transition ml-4" title="Delete Row">
+                        class="text-red-500 opacity-0 group-hover:opacity-100 hover:text-red-400 transition transform hover:scale-110 p-2" 
+                        title="Delete Row">
                     🗑️
                 </button>
             </td>
         </tr>`;
     });
 
-    html += `</tbody></table>`;
+    html += `</tbody></table></div>`;
     tableContainer.innerHTML = html;
     mainView.appendChild(tableContainer);
 }
@@ -229,6 +238,104 @@ function renderEmptyTableState(dbName, tableName) {
             </div>
         </div>
     `;
+}
+
+
+
+async function handleInsert(dbName, tableName) {
+    const values = prompt(`Enter values for ${tableName} (separated by comma):`, "3,NewUser");
+
+    if (values === null) return;
+
+    try {
+        const response = await fetch('/data/insert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                db_name: dbName,
+                table_name: tableName,
+                values: values
+            })
+        });
+
+        const result = await response.text();
+
+        if (response.ok) {
+            alert("Success!");
+            fetchTableData(dbName, tableName); 
+        } else {
+            alert("Error: " + result);
+        }
+
+    } catch (error) {
+        console.error("Insert failed:", error);
+        alert("Failed to connect to server.");
+    }
+}
+
+
+
+async function deleteRow(dbName, tableName, pkValue) {
+
+    if (!confirm(`Are you sure you want to delete ID ${pkValue}?`)) {
+        return; 
+    }
+
+    try {
+        const response = await fetch('/data/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                db_name: dbName,
+                table_name: tableName,
+                pk_value: pkValue
+            })
+        });
+
+        const result = await response.text();
+
+        if (response.ok) {
+            fetchTableData(dbName, tableName);
+        } else {
+            alert("Error: " + result);
+        }
+
+    } catch (error) {
+        console.error("Delete failed:", error);
+        alert("Failed to connect to server.");
+    }
+}
+
+
+async function promptInsertRow(dbName, tableName) {
+
+    const values = prompt(`Enter values for ${tableName} (comma separated):`);
+
+    if (!values) return;
+
+    try {
+        const response = await fetch('/data/insert', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                db_name: dbName,
+                table_name: tableName,
+                values: values
+            })
+        });
+
+        const result = await response.text();
+
+        if (response.ok) {
+            fetchTableData(dbName, tableName);
+        } else {
+            alert("Error: " + result);
+        }
+
+    } catch (error) {
+        console.error("Insert failed:", error);
+        alert("Failed to connect to server.");
+    }
 }
 
 fetchDatabases()
