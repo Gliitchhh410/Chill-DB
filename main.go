@@ -37,6 +37,12 @@ type UpdateRequest struct {
 	Value     string `json:"value"`
 }
 
+type DeleteRequest struct{
+	DBName    string `json:"db_name"`
+	TableName string `json:"table_name"`
+	PKValue   string `json:"pk_value"`
+}
+
 func main() {
 	http.HandleFunc("/databases", listDatabases)
 
@@ -49,6 +55,9 @@ func main() {
 	http.HandleFunc("/data/query", queryTable)
 
 	http.HandleFunc("/data/update", updateRow)
+
+	http.HandleFunc("/data/delete", deleteRow)
+
 
 	fmt.Println("🚀 Server is running on http://localhost:8080 ...")
 	err := http.ListenAndServe(":8080", nil)
@@ -223,6 +232,37 @@ func updateRow(w http.ResponseWriter, r *http.Request){
 		http.Error(w, string(output), http.StatusInternalServerError)
 		return
 	}
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "Success: %s", string(output))
+}
+
+
+func deleteRow(w http.ResponseWriter, r *http.Request){
+	if r.Method != http.MethodPost {
+		http.Error(w, "Only POST method is allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req DeleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.DBName == "" || req.PKValue == "" || req.TableName== ""{
+		http.Error(w, "Missing fields", http.StatusBadRequest)
+		return
+	}
+
+	cmd := exec.Command("./data_ops.sh", "delete", req.DBName, req.TableName, req.PKValue)
+
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		http.Error(w, string(output), http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "Success: %s", string(output))
 }
