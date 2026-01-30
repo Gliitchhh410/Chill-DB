@@ -379,4 +379,35 @@ function promptInsertRow(dbName, tableName) {
     });
 }
 
+
+function createDatabase() {
+    Modal.open({
+        title: 'Create New Database',
+        msg: 'Enter a name for your new database (no spaces):',
+        showInput: true,
+        onConfirm: async (dbName) => {
+            if (!dbName) return;
+
+            try {
+                const response = await fetch('/database/create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: dbName })
+                });
+
+                const result = await response.text();
+
+                if (response.ok) {
+                    fetchDatabases();
+                } else {
+                    alert("Error: " + result);
+                }
+            } catch (error) {
+                console.error(error);
+                alert("Failed to connect.");
+            }
+        }
+    });
+}
+
 fetchDatabases()
