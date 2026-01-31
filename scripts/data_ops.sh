@@ -87,24 +87,64 @@ case $COMMAND in
             exit 0
             ;;
             
-        "delete")
-            PK_VALUE=$4
+    "delete")
+        FILTER_COL=$4
+        FILTER_VAL=$5
 
-            if [ -z "$PK_VALUE" ]; then
-                echo "Error: Usage: ./data_ops.sh delete <db> <table> <pk>"
-                exit 1
-            fi
+        if [ -z "$FILTER_COL" ] || [ -z "$FILTER_VAL" ]; then
+            echo "Error: Usage: ./data_ops.sh delete <db> <table> <col> <value>"
+            exit 1
+        fi
 
 
-            if ! grep -q "^$PK_VALUE," "$TABLE_FILE"; then
-                echo "Error: Record with ID $PK_VALUE not found"
-                exit 1
-            fi
+        HEADER=$(head -n 1 "$TABLE_FILE" | tr -d '\r')
+        
+        COL_IDX=$(awk -F, -v col="$FILTER_COL" '{
+            for(i=1; i<=NF; i++) {
+                # Split "id:int" into parts[1]="id", parts[2]="int"
+                split($i, parts, ":");
+                
+                # Clean whitespace/newlines from the name
+                col_name = parts[1];
+                gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", col_name);
+                
+                if(col_name == col) { 
+                    print i; 
+                    exit 
+                }
+            }
+        }' "$META_FILE")
 
-            awk -F, -v pk="$PK_VALUE" '$1 !=pk' "$TABLE_FILE">"$TABLE_FILE.tmp" && mv "$TABLE_FILE.tmp" "$TABLE_FILE"
-            echo "Record deleted successfully."
-            exit 0
-            ;;
+        if [ -z "$COL_IDX" ]; then
+            echo "Error: Column '$FILTER_COL' not found in table header."
+            exit 1
+        fi
+
+
+        EXISTS=$(awk -F, -v idx="$COL_IDX" -v val="$FILTER_VAL" '
+            NR > 1 {
+                # Trim whitespace from the value in the cell
+                clean_cell=$idx; gsub(/^[ \t\r]+|[ \t\r]+$/, "", clean_cell);
+                if(clean_cell == val) { print "yes"; exit }
+            }' "$TABLE_FILE")
+
+        if [ "$EXISTS" != "yes" ]; then
+            echo "Error: Record with $FILTER_COL=$FILTER_VAL not found."
+            exit 1
+        fi
+
+
+        awk -F, -v idx="$COL_IDX" -v val="$FILTER_VAL" '
+            NR==1 { print $0; next }
+            {
+                # Clean the cell data for comparison
+                clean_cell=$idx; gsub(/^[ \t\r]+|[ \t\r]+$/, "", clean_cell);
+                if(clean_cell != val) print $0
+            }' "$TABLE_FILE" > "$TABLE_FILE.tmp" && mv "$TABLE_FILE.tmp" "$TABLE_FILE"
+
+        echo "Record(s) deleted successfully."
+        exit 0
+        ;;
         "update")
 
 
@@ -128,7 +168,6 @@ case $COMMAND in
                 exit 1
             fi
 
-            # FIX: Prevent updating the Primary Key
             if [ "$COL_NUM" -eq 1 ]; then
                 echo "Error: You cannot update the Primary Key column."
                 exit 1
