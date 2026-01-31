@@ -24,7 +24,7 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 }
 
 func parseInsert(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^INSERT\s+INTO\s+(\w+)\s+VALUES\s*\((.+)\)$`)
+	re := regexp.MustCompile(`(?i)^INSERT\s+(?i)INTO\s+(\w+)\s+(?i)VALUES\s*\((.+)\)$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {
@@ -55,7 +55,7 @@ func parseInsert(dbName string, query string) (string, error) {
 }
 
 func parseDelete(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
+	re := regexp.MustCompile(`(?i)^DELETE\s+(?i)FROM\s+(\w+)(?:\s+(?i)WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 2 {
@@ -75,7 +75,7 @@ func parseDelete(dbName string, query string) (string, error) {
 	if filterCol == "" {
 		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName)
 	} else {
-		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName, filterCol ,filterVal)
+		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName, filterCol, filterVal)
 	}
 	output, err := cmd.CombinedOutput()
 
@@ -87,7 +87,7 @@ func parseDelete(dbName string, query string) (string, error) {
 
 }
 func parseSelect(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
+	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+(?i)FROM\s+(\w+)(?:\s+(?i)WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {

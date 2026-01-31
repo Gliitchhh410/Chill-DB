@@ -530,7 +530,7 @@ sqlInput.addEventListener("keypress", async (e)=>{
 
         await executeSQL(query)
         sqlInput.disabled = false;
-        sqlInput.focus();
+        
     }
 })
 
@@ -538,6 +538,7 @@ async function executeSQL(query){
     const activeDB = currentDB
 
     if (!activeDB) return
+    const normalizedQuery = query.trim().toUpperCase();
 
     try {
         const response = await fetch('/sql', {
@@ -562,7 +563,7 @@ async function executeSQL(query){
                 if (currentTable) fetchTableData(activeDB, currentTable);
             }
         } else {
-            alert("SQL Error: " + result);
+            throw new Error("");
         }
     }catch (e){
         console.error(error);
