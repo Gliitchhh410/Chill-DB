@@ -2,7 +2,7 @@
 
 A custom-built Relational Database Management System (RDBMS) featuring a **SQL Parser in Go**, a **Bash-based Storage Engine**, and a **Web-based Dashboard**.
 
-**Live Demo:** [Link to video or live site]  
+
 **Tech Stack:** Go (Golang), Bash Scripting, Vanilla JS, Tailwind CSS.
 
 ## 🚀 Why I Built This
@@ -15,14 +15,17 @@ I wanted to understand databases at a low level—not just how to use them, but 
 
 The system follows a 3-tier architecture:
 
-1.  **The Frontend (Client):** * A JavaScript/Tailwind dashboard that sends SQL commands via JSON.
+1.  **The Frontend (Client):** 
+    * A JavaScript/Tailwind dashboard that sends SQL commands via JSON.
     * Visualizes data in responsive grids.
     
-2.  **The Middleware (Go Server):** * Listens on port `8080`.
+2.  **The Middleware (Go Server):** 
+    * Listens on port `8080`.
     * **SQL Parser:** Uses Regex and String Tokenizing to break down queries (e.g., extracting `WHERE` clauses).
     * **Orchestrator:** Validates syntax and spawns system processes.
 
-3.  **The Storage Engine (Bash):** * Handles the physical data layer (`.data` and `.meta` files).
+3.  **The Storage Engine (Bash):** 
+    * Handles the physical data layer (`.data` and `.meta` files).
     * Implements **Projection** (selecting columns) and **Selection** (filtering rows) using `awk` stream processing.
     * Ensures data integrity with atomic file moves.
 
