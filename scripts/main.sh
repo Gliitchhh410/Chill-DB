@@ -80,7 +80,7 @@ while true; do
                 ;;
             "Connect To Database")
                 read -p "Enter DB Name to Connect: " DBNAME
-                if [ -d "./data/$DBNAME" ]; then
+                if [ -d "../data/$DBNAME" ]; then
                     table_menu "$DBNAME"
                 else
                     echo "Error: Database '$DBNAME' not found."

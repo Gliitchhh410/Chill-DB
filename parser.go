@@ -18,13 +18,15 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 		return parseInsert(dbName, query)
 	} else if strings.HasPrefix(upperQuery, "DELETE") {
 		return parseDelete(dbName, query)
+	} else if strings.HasPrefix(upperQuery, "UPDATE") {
+		return parseUpdate(dbName, query)
 	}
 
 	return "", fmt.Errorf("unknown command: %s", query)
 }
 
 func parseInsert(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^INSERT\s+(?i)INTO\s+(\w+)\s+(?i)VALUES\s*\((.+)\)$`)
+	re := regexp.MustCompile(`(?i)^INSERT\s+INTO\s+(\w+)\s+VALUES\s*\((.+)\)$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {
@@ -54,8 +56,26 @@ func parseInsert(dbName string, query string) (string, error) {
 	return "Row inserted successfully", nil
 }
 
+
+func parseUpdate(dbName string, query string)(string, error){
+	re := regexp.MustCompile(`(?i)^UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+)\s+WHERE\s+(\w+)\s*=\s*(.+)$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(query))
+
+	tableName := matches[1]
+	setCol := matches[2]
+	setVal := strings.Trim(strings.TrimSpace(matches[3]), "'\"") 
+	whereVal := strings.Trim(strings.TrimSpace(matches[5]), "'\"")
+	cmd := exec.Command("./scripts/data_ops.sh", "update", dbName, tableName, whereVal, setCol, setVal)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("system error: %s", string(output))
+	}
+
+	return "Row updated successfully", nil
+}
+
 func parseDelete(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^DELETE\s+(?i)FROM\s+(\w+)(?:\s+(?i)WHERE\s+(\w+)\s*=\s*(.+))?$`)
+	re := regexp.MustCompile(`(?i)^DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 2 {
@@ -87,7 +107,7 @@ func parseDelete(dbName string, query string) (string, error) {
 
 }
 func parseSelect(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+(?i)FROM\s+(\w+)(?:\s+(?i)WHERE\s+(\w+)\s*=\s*(.+))?$`)
+	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {
@@ -180,3 +200,5 @@ func getColumnIndices(dbName, tableName string, reqColumns []string) ([]int, err
 
 	return indices, nil
 }
+
+

@@ -566,7 +566,7 @@ async function executeSQL(query){
             throw new Error("");
         }
     }catch (e){
-        console.error(error);
+        console.error(e);
         alert("System Error: Failed to connect.");
     }
 }

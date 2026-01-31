@@ -27,7 +27,7 @@ case $COMMAND in
             ;;
         "list")
             ls ./data -F
-            exit 0
+            exit 0 
             ;;
         
         "drop")
