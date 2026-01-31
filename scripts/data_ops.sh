@@ -152,45 +152,59 @@ case $COMMAND in
         "update")
 
 
-            PK_VALUE=$4
-            COL_NAME=$5
-            NEW_VALUE=$6
-            if [[ -z "$PK_VALUE" || -z "$COL_NAME" || -z "$NEW_VALUE" ]]; then
+            DB_NAME=$2
+            TABLE_NAME=$3
+            SET_COL=$4
+            SET_VAL=$5
+            WHERE_COL=$6
+            WHERE_VAL=$7
+            TEMP_FILE="$DB_DIR/$TABLE_NAME.tmp"
+            if [[ -z "$SET_COL" || -z "$SET_VAL" || -z "$WHERE_COL" || -z "$WHERE_VAL" ]]; then
                 echo "Error: Usage: ./data_ops.sh update <db> <table> <pk> <col> <new_val>"
                 exit 1
             fi
 
-            COL_NUM=$(awk -F, -v col="$COL_NAME" '{
-                    for(i=1;i<=NF;i++){
-                        split($i, def, ":");
-                        if(def[1] == col) print i;
-                    }
+            SET_IDX=$(awk -F, -v col="$SET_COL" '{
+            for(i=1;i<=NF;i++){
+                split($i, def, ":");
+                if(def[1] == col) {print i; exit}
+            }   
+            }' "$META_FILE")
+    WHERE_IDX=$(awk -F, -v col="$WHERE_COL" '{
+            for(i=1;i<=NF;i++){
+                split($i, def, ":");
+                if(def[1] == col) {print i; exit}
+            }
             }' "$META_FILE")
 
-            if [ -z "$COL_NUM" ]; then
-                echo "Error: Column '$COL_NAME' not found in table schema."
+            if [ -z "$SET_IDX" ]; then
+                echo "Error: Column '$SET_COL' not found in table schema."
                 exit 1
             fi
 
-            if [ "$COL_NUM" -eq 1 ]; then
+            if [ -z "$WHERE_IDX" ]; then
+                echo "Error: Column '$WHERE_COL' not found"
+                exit 1
+            fi
+
+            if [ "$SET_IDX" -eq 1 ]; then
                 echo "Error: You cannot update the Primary Key column."
                 exit 1
             fi
 
-            if ! grep -q "^$PK_VALUE\(,\|$\)" "$TABLE_FILE"; then
-                echo "Error: Record with ID '$PK_VALUE' not found."
-                exit 1
-            fi
 
+        awk -F, -v s_idx="$SET_IDX" -v s_val="$SET_VAL" -v w_idx="$WHERE_IDX" -v w_val="$WHERE_VAL" '
+            BEGIN { OFS="," }
+            {
+            if ($w_idx == w_val) {
+                $s_idx = s_val
+            }
+            print $0
+            }' "$TABLE_FILE" > "$TEMP_FILE"
 
-            awk -F, -v pk="$PK_VALUE" -v col="$COL_NUM" -v val="$NEW_VALUE" 'BEGIN{OFS=","} {
-                if ($1 == pk){
-                    $col = val
-                }
-                print $0
-            }' "$TABLE_FILE" > "$TABLE_FILE.tmp" && mv "$TABLE_FILE.tmp" "$TABLE_FILE"
+    mv "$TEMP_FILE" "$TABLE_FILE"
+            
 
-            echo "Record updated successfully"
             exit 0
             ;;
 

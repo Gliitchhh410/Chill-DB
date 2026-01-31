@@ -528,9 +528,15 @@ sqlInput.addEventListener("keypress", async (e)=>{
 
         sqlInput.disabled = true
 
-        await executeSQL(query)
-        sqlInput.disabled = false;
-        
+        try {
+            await executeSQL(query);
+        } catch (err) {
+            console.error("Critical Failure:", err);
+            alert("Application Error: " + err.message);
+        } finally {
+            sqlInput.disabled = false;
+            sqlInput.focus();
+        }
     }
 })
 
@@ -554,16 +560,16 @@ async function executeSQL(query){
         if (response.ok) {
             // Success! 
             // If it's a SELECT (returns CSV), we render the grid.
-            if (query.toUpperCase().startsWith("SELECT") || query.toUpperCase().startsWith("DELETE") || query.toUpperCase().startsWith("INSERT")) {
+            if (query.toUpperCase().startsWith("SELECT") || query.toUpperCase().startsWith("DELETE") || query.toUpperCase().startsWith("INSERT") || query.toUpperCase().startsWith("UPDATE")) {
                 renderSQLResult(activeDB, result);
             } else {
                 // If it's INSERT/DELETE, just show success
-                alert("Success: " + result);
+                console.log("SQL Success:", result);
                 // And refresh the current table if we are looking at one
                 if (currentTable) fetchTableData(activeDB, currentTable);
             }
         } else {
-            throw new Error("");
+            throw new Error("Error in receiving response from the server");
         }
     }catch (e){
         console.error(e);

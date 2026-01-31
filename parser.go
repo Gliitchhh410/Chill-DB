@@ -56,16 +56,15 @@ func parseInsert(dbName string, query string) (string, error) {
 	return "Row inserted successfully", nil
 }
 
-
-func parseUpdate(dbName string, query string)(string, error){
+func parseUpdate(dbName string, query string) (string, error) {
 	re := regexp.MustCompile(`(?i)^UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+)\s+WHERE\s+(\w+)\s*=\s*(.+)$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	tableName := matches[1]
 	setCol := matches[2]
-	setVal := strings.Trim(strings.TrimSpace(matches[3]), "'\"") 
+	setVal := strings.Trim(strings.TrimSpace(matches[3]), "'\"")
 	whereVal := strings.Trim(strings.TrimSpace(matches[5]), "'\"")
-	cmd := exec.Command("./scripts/data_ops.sh", "update", dbName, tableName, whereVal, setCol, setVal)
+	cmd := exec.Command("./scripts/data_ops.sh", "update", dbName, tableName, setCol, setVal, matches[4], whereVal)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("system error: %s", string(output))
@@ -200,5 +199,3 @@ func getColumnIndices(dbName, tableName string, reqColumns []string) ([]int, err
 
 	return indices, nil
 }
-
-
