@@ -39,7 +39,7 @@ The system follows a 3-tier architecture:
 
 1. **Clone the repo**
    ```bash
-   git clone [https://github.com/Gliitchhh410/Chill-DB.git](https://github.com/Gliitchhh410/Chill-DB.git)
+   git clone https://github.com/Gliitchhh410/Chill-DB.git
 
    cd Chill-DB
    ```
