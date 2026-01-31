@@ -1,4 +1,4 @@
-# Chill-DB 🧊
+# Chill-DB ❄️ 
 
 A custom-built Relational Database Management System (RDBMS) featuring a **SQL Parser in Go**, a **Bash-based Storage Engine**, and a **Web-based Dashboard**.
 
