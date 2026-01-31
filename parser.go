@@ -75,7 +75,7 @@ func parseDelete(dbName string, query string) (string, error) {
 	if filterCol == "" {
 		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName)
 	} else {
-		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName, filterVal)
+		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName, filterCol ,filterVal)
 	}
 	output, err := cmd.CombinedOutput()
 
