@@ -6,22 +6,26 @@ DB_NAME=$2
 TABLE_NAME=$3
 
 
-if [ ! -d "./data" ]; then
-    echo "Error: Main data directory not found."
-    exit 1
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+DATA_DIR="$PROJECT_ROOT/data"
+DB_DIR="$DATA_DIR/$DB_NAME"
+TABLE_FILE="$DB_DIR/$TABLE_NAME.csv"
+META_FILE="$DB_DIR/$TABLE_NAME.meta"
 
-TABLE_FILE="./data/$DB_NAME/$TABLE_NAME.csv"
-META_FILE="./data/$DB_NAME/$TABLE_NAME.meta"
 
-
-if [[ ! -d "./data/$DB_NAME" ]]; then
+if [ ! -d "$DB_DIR" ]; then
     echo "Error: Database '$DB_NAME' does not exist."
     exit 1
 fi
 
-if [[ ! -f "$TABLE_FILE" ]]; then
+if [ ! -f "$TABLE_FILE" ]; then
     echo "Error: Table '$TABLE_NAME' does not exist."
+    exit 1
+fi
+
+if [ ! -f "$META_FILE" ]; then
+    echo "Error: Meta file for '$TABLE_NAME' not found."
     exit 1
 fi
 
@@ -122,23 +126,23 @@ case $COMMAND in
 
 
         EXISTS=$(awk -F, -v idx="$COL_IDX" -v val="$FILTER_VAL" '
-            NR > 1 {
-                # Trim whitespace from the value in the cell
-                clean_cell=$idx; gsub(/^[ \t\r]+|[ \t\r]+$/, "", clean_cell);
+            {  # Runs on ALL lines including line 1
+                clean_cell=$idx; 
+                gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", clean_cell);
                 if(clean_cell == val) { print "yes"; exit }
             }' "$TABLE_FILE")
 
         if [ "$EXISTS" != "yes" ]; then
-            echo "Error: Record with $FILTER_COL=$FILTER_VAL not found."
-            exit 1
+             echo "0 rows deleted. (No match for $FILTER_COL=$FILTER_VAL)"
+             exit 0
         fi
 
 
         awk -F, -v idx="$COL_IDX" -v val="$FILTER_VAL" '
-            NR==1 { print $0; next }
             {
-                # Clean the cell data for comparison
-                clean_cell=$idx; gsub(/^[ \t\r]+|[ \t\r]+$/, "", clean_cell);
+                clean_cell=$idx; 
+                gsub(/^[ \t\r\n]+|[ \t\r\n]+$/, "", clean_cell);
+                # Only print lines that DO NOT match
                 if(clean_cell != val) print $0
             }' "$TABLE_FILE" > "$TABLE_FILE.tmp" && mv "$TABLE_FILE.tmp" "$TABLE_FILE"
 

@@ -553,7 +553,7 @@ async function executeSQL(query){
         if (response.ok) {
             // Success! 
             // If it's a SELECT (returns CSV), we render the grid.
-            if (query.toUpperCase().startsWith("SELECT")) {
+            if (query.toUpperCase().startsWith("SELECT") || query.toUpperCase().startsWith("DELETE") || query.toUpperCase().startsWith("INSERT")) {
                 renderSQLResult(activeDB, result);
             } else {
                 // If it's INSERT/DELETE, just show success
