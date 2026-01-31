@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,7 +17,7 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 	} else if strings.HasPrefix(upperQuery, "INSERT") {
 		return parseInsert(dbName, query)
 	} else if strings.HasPrefix(upperQuery, "DELETE") {
-		return "", errors.New("DELETE command is under construction")
+		return parseDelete(dbName, query)
 	}
 
 	return "", fmt.Errorf("unknown command: %s", query)
@@ -54,6 +53,39 @@ func parseInsert(dbName string, query string) (string, error) {
 
 	return "Row inserted successfully", nil
 }
+
+func parseDelete(dbName string, query string) (string, error) {
+	re := regexp.MustCompile(`(?i)^DELETE\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(query))
+
+	if len(matches) < 2 {
+		return "", fmt.Errorf("syntax error. usage: DELETE FROM <table> WHERE <filter>")
+	}
+
+	tableName := strings.TrimSpace(matches[1])
+	var filterCol, filterVal string
+
+	if len(matches) == 4 && matches[2] != "" {
+		filterCol = strings.TrimSpace(matches[2])
+		filterVal = strings.TrimSpace(matches[3])
+		filterVal = strings.Trim(filterVal, "'\"")
+	}
+
+	var cmd *exec.Cmd
+	if filterCol == "" {
+		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName)
+	} else {
+		cmd = exec.Command("./scripts/data_ops.sh", "delete", dbName, tableName, filterVal)
+	}
+	output, err := cmd.CombinedOutput()
+
+	if err != nil {
+		return "", fmt.Errorf("system error: %s", string(output))
+	}
+
+	return string(output), nil
+
+}
 func parseSelect(dbName string, query string) (string, error) {
 	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
@@ -66,7 +98,7 @@ func parseSelect(dbName string, query string) (string, error) {
 	tableName := strings.TrimSpace(matches[2])
 
 	var filterCol, filterVal string
-	if len(matches) == 5 {
+	if len(matches) == 4 {
 		filterCol = strings.TrimSpace(matches[3])
 		filterVal = strings.TrimSpace(matches[4])
 		filterVal = strings.Trim(filterVal, "'\"")
