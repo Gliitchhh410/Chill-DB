@@ -221,7 +221,7 @@ function renderDataGrid(dbName, tableName, columns, rows) {
         
         <button onclick="promptInsertRow('${dbName}', '${tableName}')"
                 class="bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg transition-transform transform hover:scale-105 active:scale-95 font-medium
-                        w-full py-3 text-sm        md:w-auto md:px-5 md:py-2  ">
+                        w-full py-3 text-sm        md:w-auto md:px-5 md:py-2   ">
             + Add Row
         </button>
     `;
@@ -243,7 +243,8 @@ function renderDataGrid(dbName, tableName, columns, rows) {
     `;
 
     rows.forEach(row => {
-        const pk = row[0]; // Assuming Col 0 is ID
+        const pkVal = row[0]; // The value (e.g. 99)
+        const pkCol = columns[0]; // The name (e.g. "id") <--- ADDED THIS
         
         html += `<tr class="hover:bg-gray-700 transition-colors duration-150 group">`;
         
@@ -252,9 +253,10 @@ function renderDataGrid(dbName, tableName, columns, rows) {
             html += `<td class="px-4 py-3 md:px-6 md:py-4 whitespace-nowrap group-hover:text-white">${cell}</td>`;
         });
 
+        // UPDATED BUTTON: Passes pkCol AND pkVal
         html += `
             <td class="px-4 py-3 md:px-6 md:py-4 text-right whitespace-nowrap">
-                <button onclick="deleteRow('${dbName}', '${tableName}', '${pk}')"
+                <button onclick="deleteRow('${dbName}', '${tableName}', '${pkCol}', '${pkVal}')"
                         class="text-red-500 hover:text-red-400 transition transform hover:scale-110 p-2
                                opacity-100 md:opacity-0 md:group-hover:opacity-100"
                         title="Delete Row">
@@ -268,6 +270,7 @@ function renderDataGrid(dbName, tableName, columns, rows) {
     
     // Handle empty state
     if(rows.length === 0) {
+        // Just appending this to the container HTML after the table closes is safer
         html += `<div class="p-8 text-center text-gray-500">No records found. Click "Add Row" to start.</div>`
     }
 
@@ -325,25 +328,33 @@ async function handleInsert(dbName, tableName) {
 
 
 
-function deleteRow(dbName, tableName, pkValue) {
+function deleteRow(dbName, tableName, colName, colValue) {
 
     Modal.open({
         title: 'Delete Row?',
-        msg: `Are you sure you want to permanently delete ID "${pkValue}"? This action cannot be undone.`,
+        // Update message to show which column we are checking
+        msg: `Are you sure you want to permanently delete the record where ${colName} = "${colValue}"? This action cannot be undone.`,
         showInput: false, 
         onConfirm: async () => {
             try {
-                const response = await fetch('/data/delete', {
+                // 1. Construct the SQL Query
+                // We trust your Go parser to handle the syntax: DELETE FROM table WHERE col=val
+                const query = `DELETE FROM ${tableName} WHERE ${colName}=${colValue}`;
+
+                // 2. Send to the /sql endpoint (NOT /data/delete)
+                const response = await fetch('/sql', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         db_name: dbName,
-                        table_name: tableName,
-                        pk_value: pkValue
+                        query: query // Send the query string
                     })
                 });
                 
+                // 3. Handle Response
                 if (response.ok) {
+                    console.log("Delete successful");
+                    // Refresh the grid to show the row is gone
                     fetchTableData(dbName, tableName);
                 } else {
                     const err = await response.text();
@@ -351,6 +362,7 @@ function deleteRow(dbName, tableName, pkValue) {
                 }
             } catch (error) {
                 console.error(error);
+                alert("System Error: " + error.message);
             }
         }
     });
@@ -589,7 +601,6 @@ function renderSQLResult(dbName, csvData){
     const rows = csvData.trim().split('\n').map(line => line.split(','));
     renderDataGrid(dbName, "SQL Result", rows);
 }
-
 
 
 
