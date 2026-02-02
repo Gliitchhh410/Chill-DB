@@ -79,6 +79,13 @@ curl -s -X POST "$HOST/data/insert" \
      -d "{\"db_name\": \"$DB_NAME\", \"table_name\": \"$TABLE_USERS\", \"values\": \"4,Eve,User,ExtraData\"}"
 echo -e "\n(Above should be an error)"
 
+echo "TEST: Duplicate Primary Key (Should Fail)..."
+# Try to insert Alice (ID 1) again
+curl -s -X POST "$HOST/data/insert" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"table_name\": \"$TABLE_USERS\", \"values\": \"1,AliceClone,Admin\"}"
+echo -e "\n(Above should be an error: Primary Key exists)"
+
 echo "TEST: Querying non-existent table..."
 curl -s -X POST "$HOST/sql" \
      -H "Content-Type: application/json" \
@@ -97,10 +104,24 @@ curl -s -X POST "$HOST/sql" \
      -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT * FROM $TABLE_USERS\"}"
 echo ""
 
+
+echo "TEST: SELECT WHERE clause (Finding Bob)..."
+curl -s -X POST "$HOST/sql" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT * FROM $TABLE_USERS WHERE name=Bob\"}"
+echo ""
+
 echo "Querying Products (Should see 1 row, ensuring no Users leaked here)..."
 curl -s -X POST "$HOST/sql" \
      -H "Content-Type: application/json" \
      -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT * FROM $TABLE_PRODUCTS\"}"
+echo ""
+
+
+echo "TEST: SELECT Specific Columns (Name Only)..."
+curl -s -X POST "$HOST/sql" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT name FROM $TABLE_USERS\"}"
 echo ""
 
 print_header "6. SQL DELETE Logic (The Delete Button/SQL Box)"
@@ -118,18 +139,42 @@ curl -s -X POST "$HOST/sql" \
      -d "{\"db_name\": \"$DB_NAME\", \"query\": \"DELETE FROM $TABLE_USERS WHERE name=Charlie\"}"
 echo ""
 
-print_header "7. Verify Results"
+print_header "9. Verify Results"
 echo "Reading Users (Should ONLY see Bob)..."
 curl -s -X POST "$HOST/sql" \
      -H "Content-Type: application/json" \
      -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT * FROM $TABLE_USERS\"}"
 echo ""
 
-# ==========================================
-# PHASE 4: DESTRUCTIVE CLEANUP
-# ==========================================
+print_header "8. SQL UPDATE Logic (The Boss Level)"
 
-print_header "8. Drop Table (Button: Trash Icon)"
+echo "Current State of Bob:"
+curl -s -X POST "$HOST/sql" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT * FROM $TABLE_USERS WHERE name=Bob\"}"
+echo ""
+
+echo "TEST: Updating Bob's Role to 'SuperAdmin'..."
+curl -s -X POST "$HOST/sql" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"query\": \"UPDATE $TABLE_USERS SET role=SuperAdmin WHERE name=Bob\"}"
+echo ""
+
+echo "VERIFY: Checking if Bob is now a SuperAdmin..."
+curl -s -X POST "$HOST/sql" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"query\": \"SELECT * FROM $TABLE_USERS WHERE name=Bob\"}"
+echo ""
+
+echo "TEST: Update non-existent user (Should affect 0 rows or fail gracefully)..."
+curl -s -X POST "$HOST/sql" \
+     -H "Content-Type: application/json" \
+     -d "{\"db_name\": \"$DB_NAME\", \"query\": \"UPDATE $TABLE_USERS SET role=Ghost WHERE name=Casper\"}"
+echo ""
+
+# PHASE 4: DESTRUCTIVE CLEANUP
+
+print_header "9. Drop Table (Button: Trash Icon)"
 echo "Dropping Products table..."
 curl -s -X POST "$HOST/table/delete" \
      -H "Content-Type: application/json" \
@@ -142,10 +187,14 @@ curl -s -X POST "$HOST/tables" \
      -d "{\"name\": \"$DB_NAME\"}"
 echo ""
 
-print_header "9. Drop Database (Button: Delete DB)"
+print_header "10 Drop Database (Button: Delete DB)"
 curl -s -X POST "$HOST/database/delete" \
      -H "Content-Type: application/json" \
      -d "{\"name\": \"$DB_NAME\"}"
 echo ""
+
+
+
+
 
 print_header "Test Suite Complete."
