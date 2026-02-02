@@ -157,8 +157,8 @@ async function fetchTables(dbName){
 }
 
 
-async function fetchTableData(dbName, tableName){
-    const mainView = document.getElementById('main-view')
+async function fetchTableData(dbName, tableName) {
+    const mainView = document.getElementById('main-view');
 
     mainView.innerHTML = `
         <div class="flex flex-col items-center justify-center h-full text-gray-400">
@@ -168,7 +168,7 @@ async function fetchTableData(dbName, tableName){
     `;
 
     try {
-        const response = await fetch('/data/query', {
+        const response = await fetch('/data/query', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -179,18 +179,17 @@ async function fetchTableData(dbName, tableName){
             })
         });
 
-        const text = await response.text();
-        
-        if (!text || text.trim() === "") {
-            renderEmptyTableState(dbName, tableName);
-            return;
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || "Failed to fetch data");
         }
 
-        const rows = text.split('\n')
-            .filter(row => row.trim() !== '')
-            .map(row => row.split(','));
+        // Parse the combined JSON response
+        const data = await response.json(); 
+        // Expected data structure: { columns: ["id", "name"], rows: [["1", "bob"], ["2", "alice"]] }
 
-        renderDataGrid(dbName, tableName, rows);
+        // Pass both columns and rows to your render function
+        renderDataGrid(dbName, tableName, data.columns, data.rows);
 
     } catch (error) {
         console.error(error);
@@ -198,36 +197,36 @@ async function fetchTableData(dbName, tableName){
     }
 }
 
-function renderDataGrid(dbName, tableName, rows) {
+function renderDataGrid(dbName, tableName, columns, rows) {
     const mainView = document.getElementById('main-view');
     mainView.innerHTML = '';
 
-    // 1. The Header (Title + Add Button)
-    // We use 'flex' to push them apart, and better margins
     const header = document.createElement('div');
-    header.className = 'flex items-center justify-between mb-6 px-1';
+    header.className = 'flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 px-1 md:px-0';
+    
     header.innerHTML = `
-        <div class="flex items-center">
-            <button onclick="fetchTables('${dbName}')" class="text-gray-400 hover:text-white mr-4 transition flex items-center">
-                <span class="text-xl mr-1">←</span> Back
+        <div class="flex items-center w-full md:w-auto">
+            <button onclick="fetchTables('${dbName}')" class="text-gray-400 hover:text-white mr-3 md:mr-4 transition flex items-center shrink-0">
+                <span class="text-lg md:text-xl mr-1">←</span> <span class="hidden md:inline">Back</span>
             </button>
-            <h2 class="text-3xl font-bold text-gray-100 flex items-center tracking-tight">
-                <span class="text-blue-500 mr-3 text-2xl">📄</span> ${tableName}
+            
+            <h2 class="text-xl md:text-3xl font-bold text-gray-100 flex items-center tracking-tight truncate">
+                <span class="text-blue-500 mr-2 md:mr-3 text-lg md:text-2xl">📄</span> ${tableName}
             </h2>
-            <span class="ml-4 text-xs font-mono text-blue-300 bg-blue-900 bg-opacity-30 px-2 py-1 rounded border border-blue-800">
+            
+            <span class="ml-3 md:ml-4 text-[10px] md:text-xs font-mono text-blue-300 bg-blue-900 bg-opacity-30 px-2 py-1 rounded border border-blue-800 shrink-0">
                 ${rows.length} records
             </span>
         </div>
         
-        <button onclick="promptInsertRow('${dbName}', '${tableName}')" 
-                class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-lg transition-transform transform hover:scale-105 active:scale-95">
+        <button onclick="promptInsertRow('${dbName}', '${tableName}')"
+                class="bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg transition-transform transform hover:scale-105 active:scale-95 font-medium
+                        w-full py-3 text-sm        md:w-auto md:px-5 md:py-2  ">
             + Add Row
         </button>
     `;
     mainView.appendChild(header);
 
-    // 2. The Table Card (The Container)
-    // This gives it the "Dashboard" look with a distinct background
     const tableContainer = document.createElement('div');
     tableContainer.className = 'bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden';
 
@@ -236,30 +235,28 @@ function renderDataGrid(dbName, tableName, rows) {
             <table class="w-full text-left text-sm text-gray-300">
                 <thead class="bg-gray-900 text-gray-400 uppercase font-semibold tracking-wider">
                     <tr>
-                        ${rows[0].map((_, i) => `<th class="px-6 py-4 border-b border-gray-700">Col ${i + 1}</th>`).join('')}
-                        <th class="px-6 py-4 border-b border-gray-700 text-right">Actions</th>
+                        ${columns.map(colName => `<th class="px-4 py-3 md:px-6 md:py-4 border-b border-gray-700 whitespace-nowrap">${colName}</th>`).join('')}
+                        <th class="px-4 py-3 md:px-6 md:py-4 border-b border-gray-700 text-right whitespace-nowrap">Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-700">
     `;
 
-    // 3. The Rows
     rows.forEach(row => {
-        // We assume Column 0 is the ID for the delete button
-        const pk = row[0];
+        const pk = row[0]; // Assuming Col 0 is ID
         
         html += `<tr class="hover:bg-gray-700 transition-colors duration-150 group">`;
         
-        // Data Cells
+        // Render cells
         row.forEach(cell => {
-            html += `<td class="px-6 py-4 whitespace-nowrap group-hover:text-white">${cell}</td>`;
+            html += `<td class="px-4 py-3 md:px-6 md:py-4 whitespace-nowrap group-hover:text-white">${cell}</td>`;
         });
 
-        // Delete Button (Only visible on hover)
         html += `
-            <td class="px-6 py-4 text-right whitespace-nowrap">
-                <button onclick="deleteRow('${dbName}', '${tableName}', '${pk}')" 
-                        class="text-red-500 opacity-0 group-hover:opacity-100 hover:text-red-400 transition transform hover:scale-110 p-2" 
+            <td class="px-4 py-3 md:px-6 md:py-4 text-right whitespace-nowrap">
+                <button onclick="deleteRow('${dbName}', '${tableName}', '${pk}')"
+                        class="text-red-500 hover:text-red-400 transition transform hover:scale-110 p-2
+                               opacity-100 md:opacity-0 md:group-hover:opacity-100"
                         title="Delete Row">
                     🗑️
                 </button>
@@ -268,6 +265,12 @@ function renderDataGrid(dbName, tableName, rows) {
     });
 
     html += `</tbody></table></div>`;
+    
+    // Handle empty state
+    if(rows.length === 0) {
+        html += `<div class="p-8 text-center text-gray-500">No records found. Click "Add Row" to start.</div>`
+    }
+
     tableContainer.innerHTML = html;
     mainView.appendChild(tableContainer);
 }

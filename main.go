@@ -1,10 +1,13 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"strings"
 )
 
 type DBRequest struct {
@@ -55,6 +58,11 @@ type DeleteRequest struct {
 type SQLRequest struct {
 	DBName string `json:"db_name"`
 	Query  string `json:"query"`
+}
+
+type TableResponse struct {
+	Columns []string   `json:"columns"`
+	Rows    [][]string `json:"rows"`
 }
 
 func main() {
@@ -204,24 +212,52 @@ func insertRow(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryTable(w http.ResponseWriter, r *http.Request) {
+	// 1. Validate Method
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only Post method is allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
+	// 2. Decode Request Body
 	var req SelectRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
-
 	if err != nil {
 		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
 		return
 	}
 
 	if req.DBName == "" || req.TableName == "" {
-		http.Error(w, "Missing fields", http.StatusBadRequest)
+		http.Error(w, "Missing db_name or table_name", http.StatusBadRequest)
 		return
 	}
 
+	// 3. Get Metadata (Columns)
+	metaPath := fmt.Sprintf("./data/%s/%s.meta", req.DBName, req.TableName)
+	metaContent, err := os.ReadFile(metaPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Table metadata not found: %v", err), http.StatusNotFound)
+		return
+	}
+
+	metaReader := csv.NewReader(strings.NewReader(string(metaContent)))
+	metaRecords, err := metaReader.ReadAll()
+
+	var columns []string
+	if err == nil {
+		for _, record := range metaRecords {
+			// FIX: Iterate over ALL fields in the row (e.g., "id:int", "name:string")
+			// The previous code only read record[0], missing subsequent columns.
+			for _, field := range record {
+				// Split "name:string" -> ["name", "string"] -> take "name"
+				parts := strings.Split(field, ":")
+				if len(parts) > 0 && parts[0] != "" {
+					columns = append(columns, parts[0])
+				}
+			}
+		}
+	}
+
+	// 4. Get Data (Rows)
 	cmd := exec.Command("./scripts/data_ops.sh", "select", req.DBName, req.TableName, req.ColumnName, req.Value)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -229,7 +265,21 @@ func queryTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Fprintf(w, string(output))
+	rowReader := csv.NewReader(strings.NewReader(string(output)))
+	rows, _ := rowReader.ReadAll()
+
+	if rows == nil {
+		rows = [][]string{}
+	}
+
+	// 5. Send Response
+	response := TableResponse{
+		Columns: columns,
+		Rows:    rows,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func updateRow(w http.ResponseWriter, r *http.Request) {
@@ -401,4 +451,54 @@ func handleSQL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprint(w, result)
+}
+
+func handleGetTable(w http.ResponseWriter, r *http.Request) {
+	db := r.URL.Query().Get("db")
+	table := r.URL.Query().Get("table")
+
+	// 1. Read the Meta file (Columns)
+	metaPath := fmt.Sprintf("./data/%s/%s.meta", db, table)
+	metaContent, err := os.ReadFile(metaPath)
+	if err != nil {
+		http.Error(w, "Table metadata not found", 404)
+		return
+	}
+
+	// Parse Meta CSV
+	// Assuming format: "ColumnName,Type" or just "ColumnName"
+	metaReader := csv.NewReader(strings.NewReader(string(metaContent)))
+	metaRecords, err := metaReader.ReadAll()
+	if err != nil {
+		http.Error(w, "Failed to parse metadata", 500)
+		return
+	}
+
+	// Extract just the column names (assuming index 0 is the name)
+	var columns []string
+	for _, record := range metaRecords {
+		if len(record) > 0 {
+			columns = append(columns, record[0])
+		}
+	}
+
+	// 2. Read the Data file (Rows)
+	// (I am assuming you have logic to read rows, let's call it readRows logic)
+	// For this example, I'll assume you read the .csv or .data file here
+	rows := [][]string{}
+	dataPath := fmt.Sprintf("./data/%s/%s.data", db, table) // Example path
+	dataContent, err := os.ReadFile(dataPath)
+	if err == nil {
+		dataReader := csv.NewReader(strings.NewReader(string(dataContent)))
+		rows, _ = dataReader.ReadAll()
+	}
+
+	// 3. Send combined JSON response
+	response := map[string]interface{}{
+		"columns": columns,
+		"rows":    rows,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
