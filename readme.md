@@ -55,7 +55,15 @@ The system follows a 3-tier architecture:
 
 4. **Run a Query**
 ```SQL
-INSERT INTO users VALUES (1, 'Ahmed')
-UPDATE users SET name='Master' WHERE id=1
-SELECT * FROM users
+-- Create a new user
+INSERT INTO users VALUES (1, 'Ahmed', 'Admin')
+
+-- Update user role
+UPDATE users SET role='SuperUser' WHERE id=1
+
+-- Select specific columns
+SELECT name, role FROM users WHERE name='Ahmed'
+
+-- Delete the user
+DELETE FROM users WHERE id=1
 ```

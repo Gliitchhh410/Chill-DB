@@ -120,20 +120,28 @@ func parseCreate(dbName string, query string) (string, error) {
 }
 
 func parseUpdate(dbName string, query string) (string, error) {
-	re := regexp.MustCompile(`(?i)^UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+)\s+WHERE\s+(\w+)\s*=\s*(.+)$`)
-	matches := re.FindStringSubmatch(strings.TrimSpace(query))
+    re := regexp.MustCompile(`(?i)^UPDATE\s+(\w+)\s+SET\s+(\w+)\s*=\s*(.+)\s+WHERE\s+(\w+)\s*=\s*(.+)$`)
+    matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
-	tableName := matches[1]
-	setCol := matches[2]
-	setVal := strings.Trim(strings.TrimSpace(matches[3]), "'\"")
-	whereVal := strings.Trim(strings.TrimSpace(matches[5]), "'\"")
-	cmd := exec.Command("./scripts/data_ops.sh", "update", dbName, tableName, setCol, setVal, matches[4], whereVal)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("system error: %s", string(output))
-	}
+    if len(matches) < 6 {
+        return "", fmt.Errorf("syntax error. usage: UPDATE <table> SET <col>=<val> WHERE <col>=<val>")
+    }
 
-	return "Row updated successfully", nil
+    tableName := matches[1]
+    setCol := matches[2]
+    setVal := strings.Trim(strings.TrimSpace(matches[3]), "'\"")
+    
+    whereCol := matches[4]
+    whereVal := strings.Trim(strings.TrimSpace(matches[5]), "'\"")
+
+    cmd := exec.Command("./scripts/data_ops.sh", "update", dbName, tableName, setCol, setVal, whereCol, whereVal)
+    output, err := cmd.CombinedOutput()
+    
+    if err != nil {
+        return "", fmt.Errorf("system error: %s", string(output))
+    }
+
+    return "Row updated successfully", nil
 }
 
 func parseDelete(dbName string, query string) (string, error) {
