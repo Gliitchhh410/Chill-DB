@@ -3,41 +3,43 @@
 COMMAND=$1
 DB_NAME=$2
 TABLE_NAME=$3
-COLS=$4
 
 
-if [ ! -d "./data" ]; then
+DB_DIR="./data/$DB_NAME"
+TABLE_FILE="$DB_DIR/$TABLE_NAME.csv" 
+META_FILE="$DB_DIR/$TABLE_NAME.meta"
+
+
+if [ ! -d "data" ]; then
     echo "Error: Main data directory not found, create a DB first"
     exit 1
 fi
 
-case $COMMAND in 
-        "create")
-            if [[ -z "$DB_NAME" || -z "$TABLE_NAME" || -z "$COLS" ]]; then
-                echo "Error: Usage: ./table_ops.sh create <db_name> <table_name> <COLS>"
+    case $COMMAND in 
+            "create")
+
+            shift 3
+            COLS_ARRAY=("$@")
+
+            if [[ -z "$DB_NAME" || -z "$TABLE_NAME" || ${#COLS_ARRAY[@]} -eq 0 ]]; then
+                echo "Error: Usage: ./table_ops.sh create <db_name> <table_name> <col:type> ..."
                 exit 1
             fi
 
-            if [ ! -d "./data/$DB_NAME" ]; then
-                echo "Error: Database $DB_NAME does not exist"
+            if [ -f "$TABLE_FILE" ]; then
+                echo "Error: Table '$TABLE_NAME' already exists"
                 exit 1
             fi
 
 
-            if [ -f "./data/$DB_NAME/$TABLE_NAME.csv" ]; then
-                echo "Error: Table $TABLE_NAME already exists"
-                exit 1
-            fi
+            touch "$TABLE_FILE"
+            IFS=,
 
-            touch "./data/$DB_NAME/$TABLE_NAME.csv"
-
-            echo "$COLS" > "./data/$DB_NAME/$TABLE_NAME.meta"
-            touch "./data/$DB_NAME/$TABLE_NAME.pk"
+            echo "${COLS_ARRAY[*]}" > "$META_FILE"
+            
             echo "Table '$TABLE_NAME' created successfully."
             exit 0
             ;;
-
-
         "list")
 
             if [[ -z "$DB_NAME" ]]; then

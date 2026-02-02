@@ -20,6 +20,8 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 		return parseDelete(dbName, query)
 	} else if strings.HasPrefix(upperQuery, "UPDATE") {
 		return parseUpdate(dbName, query)
+	} else if strings.HasPrefix(upperQuery, "CREATE") {
+		return parseCreate(dbName, query)
 	}
 
 	return "", fmt.Errorf("unknown command: %s", query)
@@ -54,6 +56,46 @@ func parseInsert(dbName string, query string) (string, error) {
 	}
 
 	return "Row inserted successfully", nil
+}
+
+func parseCreate(dbName string, query string) (string, error) {
+	re := regexp.MustCompile(`(?i)^CREATE\s+TABLE\s+(\w+)\s*\((.+)\)$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(query))
+
+	if len(matches) < 3 {
+		return "", fmt.Errorf("syntax error. usage: CREATE TABLE <name> (<col> <type>, ...)")
+	}
+
+	tableName := matches[1]
+	rawCols := matches[2]
+
+	bashArgs := []string{"create", dbName, tableName}
+	colDefs := strings.Split(rawCols, ",")
+
+	for _, def := range colDefs {
+		def = strings.TrimSpace(def)
+		// Split "id int" by space -> ["id", "int"]
+		parts := strings.Fields(def)
+
+		if len(parts) != 2 {
+			return "", fmt.Errorf("invalid column definition: '%s'. usage: name type", def)
+		}
+
+		colName := parts[0]
+		colType := parts[1]
+
+		// Format specifically for your table_ops.sh script: "name:type"
+		bashArgs = append(bashArgs, fmt.Sprintf("%s:%s", colName, colType))
+	}
+
+	cmd := exec.Command("./scripts/table_ops.sh", bashArgs...)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("system error: %s", string(output))
+	}
+
+	return "DB created successfully", nil
 }
 
 func parseUpdate(dbName string, query string) (string, error) {
