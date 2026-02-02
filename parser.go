@@ -22,6 +22,8 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 		return parseUpdate(dbName, query)
 	} else if strings.HasPrefix(upperQuery, "CREATE") {
 		return parseCreate(dbName, query)
+	} else if strings.HasPrefix(upperQuery, "DROP") {
+		return parseDrop(dbName, query)
 	}
 
 	return "", fmt.Errorf("unknown command: %s", query)
@@ -56,6 +58,22 @@ func parseInsert(dbName string, query string) (string, error) {
 	}
 
 	return "Row inserted successfully", nil
+}
+
+func parseDrop(dbName string, query string) (string, error) {
+	re := regexp.MustCompile(`(?i)^DROP\s+TABLE\s+(\w+)$`)
+	matches := re.FindStringSubmatch(strings.TrimSpace(query))
+	if len(matches) < 2 {
+		return "", fmt.Errorf("syntax error. usage: DROP TABLE <table_name>")
+	}
+	tableName := matches[1]
+	cmd := exec.Command("./scripts/table_ops.sh", "drop", dbName, tableName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return string(output), fmt.Errorf("system error: %s", string(output))
+	}
+
+	return string(output), nil
 }
 
 func parseCreate(dbName string, query string) (string, error) {

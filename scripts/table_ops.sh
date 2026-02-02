@@ -61,14 +61,22 @@ fi
                 exit 1
             fi
 
-            if [ ! -f "./data/$DB_NAME/$TABLE_NAME.csv" ]; then
-                echo "Error: Table $TABLE_NAME does not exist"
-                exit 1
+            if [ -f "$DB_DIR/$TABLE_NAME.csv" ]; then
+                TARGET_FILE="$DB_DIR/$TABLE_NAME.csv"
+            elif [ -f "$DB_DIR/$TABLE_NAME.data" ]; then
+                TARGET_FILE="$DB_DIR/$TABLE_NAME.data"
+            else
+                echo "Error: Table '$TABLE_NAME' does not exist"
+            exit 1
             fi
 
-            rm "./data/$DB_NAME/$TABLE_NAME.csv"
-            rm "./data/$DB_NAME/$TABLE_NAME.meta"
-            rm "./data/$DB_NAME/$TABLE_NAME.pk"
+            rm "$TARGET_FILE"
+            rm "$META_FILE"
+
+            if [ -f "$DB_DIR/$TABLE_NAME.pk" ]; then
+            rm "$DB_DIR/$TABLE_NAME.pk"
+            fi
+
 
             echo "Table $TABLE_NAME dropped successfully"
             exit 0
