@@ -1,6 +1,9 @@
 const dbListContainer = document.getElementById("db-list")
 const sqlInput = document.getElementById('sql-input');
-let currentDB = null;
+let activeDB = null;
+let currentTable = null;
+let currentDB = null; 
+
 const Modal = {
     overlay: document.getElementById('modal-overlay'),
     title: document.getElementById('modal-title'),
@@ -13,7 +16,6 @@ const Modal = {
         this.title.textContent = title;
         this.message.textContent = msg;
         
-
         if (showInput) {
             this.input.classList.remove('hidden');
             this.input.value = ''; 
@@ -24,7 +26,6 @@ const Modal = {
 
         this.overlay.classList.remove('hidden');
 
-   
         this.btnCancel.onclick = () => {
             this.close();
         };
@@ -35,7 +36,7 @@ const Modal = {
             if (showInput && !inputValue.trim()) return;
             
             this.close();
-            onConfirm(inputValue); 
+            if (onConfirm) onConfirm(inputValue); 
         };
     },
 
@@ -56,7 +57,6 @@ async function fetchDatabases(){
         const databases = text.split('\n').filter(line => line.trim() !=='')
 
         dbListContainer.innerHTML = ''
-
 
         databases.forEach(dbName => {
             const item = document.createElement('div');
@@ -142,7 +142,6 @@ async function fetchTables(dbName){
                 </div>
             `;
 
-            // Click to view data (Future Step)
             card.onclick = () => fetchTableData(dbName, tableName);
 
             grid.appendChild(card);
@@ -159,7 +158,8 @@ async function fetchTables(dbName){
 
 async function fetchTableData(dbName, tableName) {
     const mainView = document.getElementById('main-view');
-
+    activeDB = dbName;
+    currentTable = tableName;
     mainView.innerHTML = `
         <div class="flex flex-col items-center justify-center h-full text-gray-400">
             <div class="animate-pulse mb-4 text-4xl">📄</div>
@@ -184,11 +184,7 @@ async function fetchTableData(dbName, tableName) {
             throw new Error(errorText || "Failed to fetch data");
         }
 
-        // Parse the combined JSON response
         const data = await response.json(); 
-        // Expected data structure: { columns: ["id", "name"], rows: [["1", "bob"], ["2", "alice"]] }
-
-        // Pass both columns and rows to your render function
         renderDataGrid(dbName, tableName, data.columns, data.rows);
 
     } catch (error) {
@@ -219,12 +215,12 @@ function renderDataGrid(dbName, tableName, columns, rows) {
             </span>
         </div>
         
-        <button onclick="promptInsertRow('${dbName}', '${tableName}')"
+        <button onclick="handleInsert('${dbName}', '${tableName}')"
                 class="bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg transition-transform transform hover:scale-105 active:scale-95 font-medium
                         w-full py-3 text-sm        md:w-auto md:px-5 md:py-2   ">
             + Add Row
         </button>
-    `;
+    `; 
     mainView.appendChild(header);
 
     const tableContainer = document.createElement('div');
@@ -243,17 +239,15 @@ function renderDataGrid(dbName, tableName, columns, rows) {
     `;
 
     rows.forEach(row => {
-        const pkVal = row[0]; // The value (e.g. 99)
-        const pkCol = columns[0]; // The name (e.g. "id") <--- ADDED THIS
+        const pkVal = row[0]; 
+        const pkCol = columns[0]; 
         
         html += `<tr class="hover:bg-gray-700 transition-colors duration-150 group">`;
         
-        // Render cells
         row.forEach(cell => {
             html += `<td class="px-4 py-3 md:px-6 md:py-4 whitespace-nowrap group-hover:text-white">${cell}</td>`;
         });
 
-        // UPDATED BUTTON: Passes pkCol AND pkVal
         html += `
             <td class="px-4 py-3 md:px-6 md:py-4 text-right whitespace-nowrap">
                 <button onclick="deleteRow('${dbName}', '${tableName}', '${pkCol}', '${pkVal}')"
@@ -268,9 +262,7 @@ function renderDataGrid(dbName, tableName, columns, rows) {
 
     html += `</tbody></table></div>`;
     
-    // Handle empty state
     if(rows.length === 0) {
-        // Just appending this to the container HTML after the table closes is safer
         html += `<div class="p-8 text-center text-gray-500">No records found. Click "Add Row" to start.</div>`
     }
 
@@ -278,91 +270,70 @@ function renderDataGrid(dbName, tableName, columns, rows) {
     mainView.appendChild(tableContainer);
 }
 
-function renderEmptyTableState(dbName, tableName) {
-    const mainView = document.getElementById('main-view');
-    mainView.innerHTML = `
-        <div class="flex flex-col h-full">
-            <button onclick="fetchTables('${dbName}')" class="text-left text-gray-400 hover:text-white mb-4">← Back</button>
-            <div class="flex-1 flex flex-col items-center justify-center text-gray-500">
-                <p class="mb-4">Table is empty.</p>
-                <button onclick="promptInsertRow('${dbName}', '${tableName}')" class="text-blue-400 hover:underline">
-                    Add your first row
-                </button>
-            </div>
-        </div>
-    `;
-}
+function handleInsert(dbName, tableName) {
+    Modal.open({
+        title: 'Insert Row',
+        msg: `Enter values for ${tableName} (separated by comma):`,
+        showInput: true,
+        onConfirm: async (values) => {
+            if (!values) return;
 
+            try {
+                const response = await fetch('/data/insert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        db_name: dbName,
+                        table_name: tableName,
+                        values: values
+                    })
+                });
 
+                if (response.ok) {
+                    console.log("Insert successful");
+                    await fetchTableData(dbName, tableName); 
+                } else {
+                    const result = await response.text();
+                    Modal.open({ title: 'Insert Failed', msg: "Error: " + result, onConfirm: () => {} });
+                }
 
-async function handleInsert(dbName, tableName) {
-    const values = prompt(`Enter values for ${tableName} (separated by comma):`, "3,NewUser");
-
-    if (values === null) return;
-
-    try {
-        const response = await fetch('/data/insert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                db_name: dbName,
-                table_name: tableName,
-                values: values
-            })
-        });
-
-        const result = await response.text();
-
-        if (response.ok) {
-            alert("Success!");
-            fetchTableData(dbName, tableName); 
-        } else {
-            alert("Error: " + result);
+            } catch (error) {
+                console.error("Insert failed:", error);
+                Modal.open({ title: 'Connection Error', msg: "Failed to connect to server.", onConfirm: () => {} });
+            }
         }
-
-    } catch (error) {
-        console.error("Insert failed:", error);
-        alert("Failed to connect to server.");
-    }
+    });
 }
-
 
 
 function deleteRow(dbName, tableName, colName, colValue) {
-
     Modal.open({
         title: 'Delete Row?',
-        // Update message to show which column we are checking
         msg: `Are you sure you want to permanently delete the record where ${colName} = "${colValue}"? This action cannot be undone.`,
         showInput: false, 
         onConfirm: async () => {
             try {
-                // 1. Construct the SQL Query
-                // We trust your Go parser to handle the syntax: DELETE FROM table WHERE col=val
                 const query = `DELETE FROM ${tableName} WHERE ${colName}=${colValue}`;
 
-                // 2. Send to the /sql endpoint (NOT /data/delete)
                 const response = await fetch('/sql', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         db_name: dbName,
-                        query: query // Send the query string
+                        query: query 
                     })
                 });
                 
-                // 3. Handle Response
                 if (response.ok) {
                     console.log("Delete successful");
-                    // Refresh the grid to show the row is gone
                     fetchTableData(dbName, tableName);
                 } else {
                     const err = await response.text();
-                    alert("Error: " + err); 
+                    Modal.open({ title: 'Error', msg: "Error: " + err, onConfirm: () => {} }); 
                 }
             } catch (error) {
                 console.error(error);
-                alert("System Error: " + error.message);
+                Modal.open({ title: 'System Error', msg: error.message, onConfirm: () => {} });
             }
         }
     });
@@ -370,7 +341,6 @@ function deleteRow(dbName, tableName, colName, colValue) {
 
 
 function promptInsertRow(dbName, tableName) {
-
     Modal.open({
         title: 'Add New Row',
         msg: `Enter values for ${tableName} (comma separated, e.g., "5,Sarah"):`,
@@ -391,10 +361,11 @@ function promptInsertRow(dbName, tableName) {
                     fetchTableData(dbName, tableName);
                 } else {
                     const err = await response.text();
-                    alert("Error: " + err);
+                    Modal.open({ title: 'Error', msg: err, onConfirm: () => {} });
                 }
             } catch (error) {
                 console.error(error);
+                Modal.open({ title: 'Error', msg: "Failed to insert row.", onConfirm: () => {} });
             }
         }
     });
@@ -421,16 +392,15 @@ function createDatabase() {
                 if (response.ok) {
                     fetchDatabases();
                 } else {
-                    alert("Error: " + result);
+                    Modal.open({ title: 'Creation Failed', msg: "Error: " + result, onConfirm: () => {} });
                 }
             } catch (error) {
                 console.error(error);
-                alert("Failed to connect.");
+                Modal.open({ title: 'Network Error', msg: "Failed to connect.", onConfirm: () => {} });
             }
         }
     });
 }
-
 
 
 function createTable(dbName) {
@@ -465,11 +435,11 @@ function createTable(dbName) {
                             if (response.ok) {
                                 fetchTables(dbName); 
                             } else {
-                                alert("Error: " + result);
+                                Modal.open({ title: 'Table Error', msg: "Error: " + result, onConfirm: () => {} });
                             }
                         } catch (error) {
                             console.error(error);
-                            alert("Failed to connect.");
+                            Modal.open({ title: 'Connection Error', msg: "Failed to connect.", onConfirm: () => {} });
                         }
                     }
                 });
@@ -498,11 +468,11 @@ function dropTable(dbName, tableName) {
                 if (response.ok) {
                     fetchTables(dbName); 
                 } else {
-                    alert("Error: " + result);
+                    Modal.open({ title: 'Delete Failed', msg: "Error: " + result, onConfirm: () => {} });
                 }
             } catch (error) {
                 console.error(error);
-                alert("Failed to connect.");
+                Modal.open({ title: 'Connection Error', msg: "Failed to connect.", onConfirm: () => {} });
             }
         }
     });
@@ -526,11 +496,11 @@ function dropDatabase(dbName) {
                     fetchDatabases(); 
                     document.getElementById('main-view').innerHTML = '';
                 } else {
-                    alert("Error: " + result);
+                    Modal.open({ title: 'Delete Failed', msg: "Error: " + result, onConfirm: () => {} });
                 }
             } catch (error) {
                 console.error(error);
-                alert("Failed to connect.");
+                Modal.open({ title: 'Connection Error', msg: "Failed to connect.", onConfirm: () => {} });
             }
         }
     });
@@ -545,9 +515,10 @@ sqlInput.addEventListener("keypress", async (e)=>{
 
         try {
             await executeSQL(query);
+            
         } catch (err) {
             console.error("Critical Failure:", err);
-            alert("Application Error: " + err.message);
+            Modal.open({ title: 'Application Error', msg: err.message, onConfirm: () => {} });
         } finally {
             sqlInput.disabled = false;
             sqlInput.focus();
@@ -555,11 +526,16 @@ sqlInput.addEventListener("keypress", async (e)=>{
     }
 })
 
-async function executeSQL(query){
-    const activeDB = currentDB
+async function executeSQL(query) {
+    activeDB = currentDB
+    if (!activeDB) {
+        Modal.open({ title: 'No Database', msg: "Please select a database first!", onConfirm: () => {} });
+        return;
+    }
 
-    if (!activeDB) return
-    const normalizedQuery = query.trim().toUpperCase();
+
+    const sqlInput = document.getElementById('sql-input');
+    if(sqlInput) sqlInput.disabled = true;
 
     try {
         const response = await fetch('/sql', {
@@ -570,39 +546,61 @@ async function executeSQL(query){
                 query: query
             })
         });
-        const result = await response.text()
+
+        const result = await response.text();
 
         if (response.ok) {
-            // Success! 
-            // If it's a SELECT (returns CSV), we render the grid.
-            if (query.toUpperCase().startsWith("SELECT") || query.toUpperCase().startsWith("DELETE") || query.toUpperCase().startsWith("INSERT") || query.toUpperCase().startsWith("UPDATE")) {
-                renderSQLResult(activeDB, result);
-            } else {
-                // If it's INSERT/DELETE, just show success
-                console.log("SQL Success:", result);
-                // And refresh the current table if we are looking at one
-                if (currentTable) fetchTableData(activeDB, currentTable);
-            }
+            await renderSQLResult(activeDB, result);
         } else {
-            throw new Error("Error in receiving response from the server");
+            Modal.open({ title: 'SQL Error', msg: "Error: " + result, onConfirm: () => {} });
         }
-    }catch (e){
-        console.error(e);
-        alert("System Error: Failed to connect.");
+
+    } catch (error) {
+        console.error(error);
+        Modal.open({ title: 'System Error', msg: error.message, onConfirm: () => {} });
+    } finally {
+        if(sqlInput) {
+            sqlInput.disabled = false;
+            sqlInput.focus();
+        }
     }
 }
 
 
-function renderSQLResult(dbName, csvData){
-    if (!csvData.trim()) {
-        alert("Query returned no results.");
+async function renderSQLResult(dbName, csvData) {
+    if (!csvData || !csvData.trim()) {
+        Modal.open({ title: 'No Results', msg: "Query returned no results.", onConfirm: () => {} });
         return;
     }
-    const rows = csvData.trim().split('\n').map(line => line.split(','));
-    renderDataGrid(dbName, "SQL Result", rows);
+
+    const trimmedData = csvData.trim();
+
+
+    if (trimmedData.startsWith("Error") || trimmedData.startsWith("syntax error") || trimmedData.startsWith("System Error")) {
+        Modal.open({ title: 'Query Error', msg: trimmedData, onConfirm: () => {} });
+        return;
+    }
+
+    if (trimmedData.startsWith("Success") || trimmedData.startsWith("Table")) {
+        
+        if (activeDB && currentTable) {
+            console.log("Action successful, refreshing table:", currentTable);
+            await fetchTableData(activeDB, currentTable);
+        } else {
+            Modal.open({ title: 'Success', msg: trimmedData, onConfirm: () => {} });
+        }
+        return;
+    }
+
+
+    const rows = trimmedData.split('\n').map(line => line.split(','));
+    if (rows.length === 0) return;
+
+    const numberOfCols = rows[0].length;
+    const columns = Array.from({ length: numberOfCols }, (_, i) => `Col ${i + 1}`);
+
+    renderDataGrid(dbName, "SQL Result", columns, rows);
 }
-
-
 
 
 fetchDatabases()

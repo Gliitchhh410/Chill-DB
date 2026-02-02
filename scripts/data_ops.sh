@@ -32,37 +32,53 @@ fi
 
 case $COMMAND in 
         "insert")
-            VALUES=$4
 
-            
-            if [ -z "$VALUES" ]; then
-                echo "Error: Usage: ./data_ops.sh insert <db_name> <table_name> <values>"
-                exit 1
-            fi
+        DB_NAME=$2
+        TABLE_NAME=$3
+        
+        DB_DIR="./data/$DB_NAME"
+        TABLE_FILE="$DB_DIR/$TABLE_NAME.csv"
+
+        if [ ! -f "$TABLE_FILE" ]; then
+             TABLE_FILE="$DB_DIR/$TABLE_NAME.data"
+        fi
+        META_FILE="$DB_DIR/$TABLE_NAME.meta"
 
 
-            EXPECTED_COLS=$(awk -F',' '{print NF}' "$META_FILE")
-            ACTUAL_COLS=$(echo "$VALUES" | awk -F',' '{print NF}')
-
-            if [ "$EXPECTED_COLS" -ne "$ACTUAL_COLS" ]; then
-            echo "Error: Column count mismatch. Table expects $EXPECTED_COLS columns, but you provided $ACTUAL_COLS."
+        if [ ! -f "$TABLE_FILE" ]; then
+            echo "Error: Table '$TABLE_NAME' does not exist."
             exit 1
-            fi
+        fi
 
-            PK_VALUE=$(echo "$VALUES" | cut -d',' -f1)
+        META_CONTENT=$(cat "$META_FILE")
+        IFS=',' read -ra META_PARTS <<< "$META_CONTENT"
+        EXPECTED_COLS=${#META_PARTS[@]}
 
-            if grep -q "^$PK_VALUE\(,\|$\)" "$TABLE_FILE"; then
-                echo "Error: Primary Key '$PK_VALUE' already exists."
-                exit 1
-            fi
+        shift 3
+        VALUES_ARRAY=("$@") 
+        NEW_PK="${VALUES_ARRAY[0]}"
+        RECEIVED_COLS=${#VALUES_ARRAY[@]}
 
-            PK_VALUE=$(echo "$VALUES" | cut -d',' -f1)
+        if grep -q "^$NEW_PK," "$TABLE_FILE"; then
+            echo "Error: Duplicate Primary Key '$NEW_PK' already exists."
+            exit 1
+        fi
+        
+        if [ "$EXPECTED_COLS" -ne "$RECEIVED_COLS" ]; then
+             echo "Error: System expects $EXPECTED_COLS columns but were provided $RECEIVED_COLS."
+             exit 1
+        fi
 
 
-            echo "$VALUES" >> "$TABLE_FILE"
-                echo "Row inserted successfully"
-                exit 0
-            ;;
+        IFS=,
+        NEW_ROW="${VALUES_ARRAY[*]}"
+        
+
+        echo "$NEW_ROW" >> "$TABLE_FILE"
+        
+        echo "Success"
+        exit 0
+        ;;
 
 
         "select")

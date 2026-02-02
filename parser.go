@@ -30,34 +30,37 @@ func ExecuteSQL(dbName string, query string) (string, error) {
 }
 
 func parseInsert(dbName string, query string) (string, error) {
+
 	re := regexp.MustCompile(`(?i)^INSERT\s+INTO\s+(\w+)\s+VALUES\s*\((.+)\)$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {
-		return "", fmt.Errorf("syntax error. usage: INSERT INTO <table> VALUES (v1, v2...)")
+		return "", fmt.Errorf("syntax error. usage: INSERT INTO <table> VALUES (<val1>, <val2>...)")
 	}
 
 	tableName := matches[1]
 	rawValues := matches[2]
 
+	cmdArgs := []string{"insert", dbName, tableName}
+
 	parts := strings.Split(rawValues, ",")
-	var cleanParts []string
 
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		p = strings.Trim(p, "'\"")
-		cleanParts = append(cleanParts, p)
+	for _, part := range parts {
+
+		cleanVal := strings.TrimSpace(part)
+		cleanVal = strings.Trim(cleanVal, "'\"")
+
+		cmdArgs = append(cmdArgs, cleanVal)
 	}
 
-	finalValues := strings.Join(cleanParts, ",")
-	cmd := exec.Command("./scripts/data_ops.sh", "insert", dbName, tableName, finalValues)
+	cmd := exec.Command("./scripts/data_ops.sh", cmdArgs...)
+
 	output, err := cmd.CombinedOutput()
-
 	if err != nil {
-		return "", fmt.Errorf("system error: %s", string(output))
+		return string(output), fmt.Errorf("system error: %s", string(output))
 	}
 
-	return "Row inserted successfully", nil
+	return "Success", nil
 }
 
 func parseDrop(dbName string, query string) (string, error) {
@@ -166,30 +169,39 @@ func parseDelete(dbName string, query string) (string, error) {
 
 }
 func parseSelect(dbName string, query string) (string, error) {
+	// Regex Groups:
+	// 0: Full Match
+	// 1: Columns (e.g., "name, age")
+	// 2: Table Name (e.g., "users")
+	// 3: Filter Column (Optional)
+	// 4: Filter Value (Optional)
 	re := regexp.MustCompile(`(?i)^SELECT\s+(.*?)\s+FROM\s+(\w+)(?:\s+WHERE\s+(\w+)\s*=\s*(.+))?$`)
 	matches := re.FindStringSubmatch(strings.TrimSpace(query))
 
 	if len(matches) < 3 {
-		return "", fmt.Errorf("syntax error. usage: SELECT * FROM <table>")
+		return "", fmt.Errorf("syntax error. usage: SELECT <cols> FROM <table> [WHERE col=val]")
 	}
 
 	columnsStr := strings.TrimSpace(matches[1])
 	tableName := strings.TrimSpace(matches[2])
 
 	var filterCol, filterVal string
-	if len(matches) == 4 {
+
+	if len(matches) >= 5 && matches[3] != "" {
 		filterCol = strings.TrimSpace(matches[3])
 		filterVal = strings.TrimSpace(matches[4])
 		filterVal = strings.Trim(filterVal, "'\"")
 	}
+
 	cmd := exec.Command("./scripts/data_ops.sh", "select", dbName, tableName, filterCol, filterVal)
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("system error: %s", string(output))
 	}
 
 	rawData := string(output)
-	if rawData == "" {
+	if strings.TrimSpace(rawData) == "" {
 		return "", nil
 	}
 
@@ -204,7 +216,7 @@ func parseSelect(dbName string, query string) (string, error) {
 	}
 
 	var resultBuilder strings.Builder
-	lines := strings.Split(rawData, "\n")
+	lines := strings.Split(strings.TrimSpace(rawData), "\n")
 
 	for _, line := range lines {
 		if strings.TrimSpace(line) == "" {
@@ -217,6 +229,8 @@ func parseSelect(dbName string, query string) (string, error) {
 		for _, index := range indices {
 			if index < len(cells) {
 				newRow = append(newRow, cells[index])
+			} else {
+				newRow = append(newRow, "")
 			}
 		}
 
@@ -228,21 +242,25 @@ func parseSelect(dbName string, query string) (string, error) {
 
 func getColumnIndices(dbName, tableName string, reqColumns []string) ([]int, error) {
 	metaPath := fmt.Sprintf("./data/%s/%s.meta", dbName, tableName)
-	content, err := os.ReadFile(metaPath)
 
+	content, err := os.ReadFile(metaPath)
 	if err != nil {
 		absPath, _ := filepath.Abs(metaPath)
-		return nil, fmt.Errorf("debug: tried to open '%s' (Absolute: %s). System Error: %v", metaPath, absPath, err)
+		return nil, fmt.Errorf("table metadata not found at '%s' (Abs: %s)", metaPath, absPath)
 	}
 
-	rawHeaders := strings.Split(strings.TrimSpace(string(content)), ",")
+	cleanContent := strings.ReplaceAll(string(content), ",", " ")
+	rawHeaders := strings.Fields(cleanContent)
+
 	headerMap := make(map[string]int)
 
 	for i, h := range rawHeaders {
-		h = strings.TrimSpace(h)
+
 		parts := strings.Split(h, ":")
-		colName := parts[0]
-		headerMap[colName] = i
+		if len(parts) > 0 {
+			colName := strings.TrimSpace(parts[0])
+			headerMap[colName] = i
+		}
 	}
 
 	var indices []int

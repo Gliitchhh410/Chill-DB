@@ -199,7 +199,19 @@ func insertRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cmd := exec.Command("./scripts/data_ops.sh", "insert", req.DBName, req.TableName, req.Values)
+
+	valueArgs := strings.Split(req.Values, ",")
+
+	for i := range valueArgs {
+		valueArgs[i] = strings.TrimSpace(valueArgs[i])
+	}
+
+
+	cmdArgs := append([]string{"insert", req.DBName, req.TableName}, valueArgs...)
+
+	cmd := exec.Command("./scripts/data_ops.sh", cmdArgs...)
+
+
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -208,9 +220,8 @@ func insertRow(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "Success: %s", string(output))
+	fmt.Fprintf(w, "Success")
 }
-
 func queryTable(w http.ResponseWriter, r *http.Request) {
 	// 1. Validate Method
 	if r.Method != http.MethodPost {
