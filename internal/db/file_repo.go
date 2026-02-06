@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"chill-db/internal/domain"
+	"encoding/csv"
 )
-
 
 type FileRepository struct {
 	DataDir string
@@ -81,5 +82,46 @@ func (r *FileRepository) CreateDatabase(ctx context.Context, name string)  error
 }
 
 
-func 
+func (r *FileRepository) CreateTable(ctx context.Context, dbName string, table domain.TableMetaData)  error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Structure: ./data/{dbName}/{tableName}.meta
+	metaPath, err := r.resolvePath(dbName, table.Name+".meta")
+	if err != nil { return err }
+
+	// Structure: ./data/{dbName}/{tableName}.data
+	dataPath, err := r.resolvePath(dbName, table.Name+".data")
+	if err != nil { return err }
+
+	if _, err := os.Stat(metaPath); err == nil {
+		return fmt.Errorf("table '%s' already exists in '%s'", table.Name, dbName)
+	}
+
+	metaFile, err := os.Create(metaPath)
+	if err != nil {
+		// If the DB directory doesn't exist, this fails with PathError
+		return fmt.Errorf("failed to create table meta: %w", err)
+	}
+
+	defer metaFile.Close()
+
+
+	// We write: Name, Type (e.g., "id,int")
+	writer := csv.NewWriter(metaFile)
+	for _, col := range table.Columns {
+		if err := writer.Write([]string{col.Name, col.Type}); err != nil { // Writes a line like: "id,int" or "username,string"
+			return err
+		}
+	}
+	writer.Flush() // Pushes any buffered data to the file"disc"
+
+	dataFile, err := os.Create(dataPath)
+	if err != nil {
+		return fmt.Errorf("failed to create table data: %w", err)
+	}
+	dataFile.Close() // Close immediately, we just needed to create it
+	return  nil
+}
+
 
