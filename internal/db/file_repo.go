@@ -124,4 +124,40 @@ func (r *FileRepository) CreateTable(ctx context.Context, dbName string, table d
 	return  nil
 }
 
+//resolvepath, os.OpenFile, csv.NewWriter
+func (r *FileRepository) InsertRow(ctx context.Context, dbName, tableName string, row domain.Row) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
+
+	dataPath, err := r.resolvePath(dbName, tableName + ".data")
+	if err != nil{
+		return err
+	}
+
+
+
+	file, err := os.OpenFile(dataPath, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		if os.IsNotExist(err){
+			return fmt.Errorf("table '%s' does not exist", tableName)
+		}
+		return fmt.Errorf("failed to open table: %w", err)
+	}
+
+	defer file.Close()
+
+
+	writer := csv.NewWriter(file)
+
+	if err:= writer.Write(row); err != nil {
+		return fmt.Errorf("failed to write row: %w", err)
+	}
+
+	writer.Flush()
+
+	if err := writer.Error(); err != nil {
+		return err
+	}
+	return nil
+}
