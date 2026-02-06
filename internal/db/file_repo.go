@@ -161,3 +161,42 @@ func (r *FileRepository) InsertRow(ctx context.Context, dbName, tableName string
 	}
 	return nil
 }
+
+
+func (r *FileRepository) Query(ctx context.Context, dbName, tableName string) ([]domain.Row, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+
+	dataPath, err := r.resolvePath(dbName, tableName+"data")
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(dataPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("table '%s' does not exist", tableName)
+		}
+		return nil, fmt.Errorf("failed to open table: %w", err)
+	}
+	defer file.Close()
+
+
+	reader := csv.NewReader(file)
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		// Empty file is not an error, just return empty list
+		return []domain.Row{}, nil 
+	}
+
+
+	var rows []domain.Row
+	for _, record := range records {
+		rows = append(rows, domain.Row(record))
+	}
+
+	return rows, nil
+
+}
