@@ -53,7 +53,7 @@ func (h *Handler) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 // DropDatabase handles Delete /database/drop
 func (h *Handler) DropDatabase(w http.ResponseWriter, r *http.Request){
 	if r.Method != http.MethodDelete {
-		http.Error(w, "Failed to drop database", http.StatusInternalServerError)
+		http.Error(w, "Failed to drop database", http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -72,6 +72,9 @@ func (h *Handler) DropDatabase(w http.ResponseWriter, r *http.Request){
 		http.Error(w, "Failed to drop database", http.StatusInternalServerError)
 		return
 	}
+
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("Database created successfully"))
 }
 
 // ListDatabases handles GET /databases

@@ -84,8 +84,7 @@ func (r *FileRepository) DropDatabase(ctx context.Context, dbName string) error 
 	if err != nil {
 		return err
 	}
-	os.RemoveAll(dbPath)
-	return nil
+	return os.RemoveAll(dbPath) // return error if failed
 }
 
 func (r *FileRepository) CreateTable(ctx context.Context, dbName string, table domain.TableMetaData) error {
