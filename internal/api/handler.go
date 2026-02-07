@@ -30,7 +30,6 @@ func (h *Handler) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 	var req DBRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -49,6 +48,30 @@ func (h *Handler) CreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte("Database created successfully"))
+}
+
+// DropDatabase handles Delete /database/drop
+func (h *Handler) DropDatabase(w http.ResponseWriter, r *http.Request){
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Failed to drop database", http.StatusInternalServerError)
+		return
+	}
+
+	var req DBRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		http.Error(w, "Database name is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.Repo.DropDatabase(r.Context(), req.Name); err != nil {
+		http.Error(w, "Failed to drop database", http.StatusInternalServerError)
+		return
+	}
 }
 
 // ListDatabases handles GET /databases

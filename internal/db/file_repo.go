@@ -77,6 +77,17 @@ func (r *FileRepository) CreateDatabase(ctx context.Context, name string) error 
 	return nil
 }
 
+func (r *FileRepository) DropDatabase(ctx context.Context, dbName string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	dbPath, err := r.resolvePath(dbName)
+	if err != nil {
+		return err
+	}
+	os.RemoveAll(dbPath)
+	return nil
+}
+
 func (r *FileRepository) CreateTable(ctx context.Context, dbName string, table domain.TableMetaData) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

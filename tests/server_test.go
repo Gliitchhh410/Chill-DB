@@ -23,7 +23,7 @@ type SQLRequest struct {
 	Query  string `json:"query"`
 }
 
-func TestEndToEnd(t *testing.T) {
+func TestSQLIntegration(t *testing.T) {
 	// 1. SETUP: Create a temporary directory for the test data
 	tempDir, err := os.MkdirTemp("", "chill-db-integration")
 	if err != nil {
