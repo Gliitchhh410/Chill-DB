@@ -1,0 +1,9 @@
+data/
+.vscode/
+*.gz
+chill-db
+main
+*.exe
+*.test
+*.tmp
+*.lock
