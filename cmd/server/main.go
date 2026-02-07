@@ -20,6 +20,7 @@ func main() {
 	mux.HandleFunc("/databases", handler.ListDatabases)
 	mux.HandleFunc("/database/create", handler.CreateDatabase)
 	mux.HandleFunc("/sql", handler.HandleSQL)
+	mux.HandleFunc("/database/drop", handler.DropDatabase)
 
 	fmt.Println("Server is running on :8080")
 	log.Fatal(http.ListenAndServe(":8080", mux))
