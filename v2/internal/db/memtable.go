@@ -19,12 +19,7 @@ func NewMemTable() *MemTable {
 	}
 }
 
-// Put adds a key-value pair to the table.
-// TODO:
-// 1. Lock the mutex (m.mu.Lock())
-// 2. Defer the unlock
-// 3. Add the key and value to m.data
-// 4. Update m.size (add len(key) + len(value))
+
 func (m *MemTable) Put(key string, value []byte){
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -34,12 +29,7 @@ func (m *MemTable) Put(key string, value []byte){
 }
 
 
-// Get retrieves a value by key.
-// TODO:
-// 1. Read-Lock the mutex (m.mu.RLock()) - allows multiple readers, blocks writers
-// 2. Defer the unlock
-// 3. Look up the key in m.data
-// 4. Return the value and the exists boolean
+
 func (m *MemTable) Get(key string) ([]byte, bool){
 	m.mu.RLock()
 	defer m.mu.RUnlock()

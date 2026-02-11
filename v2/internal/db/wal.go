@@ -25,14 +25,7 @@ func NewWAL(path string) (*WAL, error) {
 	}
 	return &WAL{file: f}, nil
 }
-// 1. Lock the mutex (w.mu.Lock())
-// 2. Defer unlock
-// 3. Write Key Length (int32) using binary.Write
-// 4. Write Value Length (int32) using binary.Write
-// 5. Write the Key bytes
-// 6. Write the Value bytes
-// 7. Call w.file.Sync() to force the OS to save to disk immediately
-// Hint: binary.Write(w.file, binary.LittleEndian, int32(len(key)))
+
 func (w *WAL) Append(key string, value []byte) error{
 	w.mu.Lock()
 	defer w.mu.Unlock()
