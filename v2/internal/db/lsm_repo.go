@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 type LSMRepository struct {
 	memTable *MemTable
 	wal      *WAL
+	storageDir string
 }
 
 
 func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	if _, err := os.Stat(storageDir); os.IsNotExist(err) {
-		os.Mkdir(storageDir, 0755)
+		os.Mkdir(storageDir, 0755) // Use MkdirAll just in case
 	}
 
 	wal, err := NewWAL(storageDir + "/wal.log")
@@ -26,6 +28,7 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	return &LSMRepository{
 		memTable: NewMemTable(),
 		wal:      wal,
+		storageDir: storageDir,
 	}, nil
 }
 
@@ -44,6 +47,30 @@ func (r *LSMRepository) InsertRow(tableName string, row domain.Row) error {
 	}
 	r.memTable.Put(key, jsonRow)
 	return nil 
+}
+
+
+func (r *LSMRepository) Flush() error {
+	r.memTable.mu.Lock()
+	defer r.memTable.mu.Unlock()
+
+	if r.memTable.size == 0 {
+		return nil
+	}
+
+	filename := fmt.Sprintf("%s/sst_%d.db", r.storageDir, time.Now().UnixNano())
+	_,err := WriteSSTable(r.memTable.data, filename)
+	if err != nil {
+		return err
+	}
+
+	r.memTable.data = make(map[string][]byte)
+	r.memTable.size = 0
+	if err := r.wal.Truncate(); err != nil {
+		return fmt.Errorf("failed to truncate WAL: %w", err)
+	}
+	return nil
+	
 }
 
 

@@ -12,6 +12,7 @@ import (
 
 type WAL struct {
 	file *os.File
+	path string
 	mu sync.Mutex
 }
 
@@ -23,8 +24,27 @@ func NewWAL(path string) (*WAL, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &WAL{file: f}, nil
+	return &WAL{file: f, path: path}, nil
 }
+func (w *WAL) Truncate() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	// 1. Close the current file handle
+	if err := w.file.Close(); err != nil {
+		return err
+	}
+
+	// 2. Wipe the file content using the path we saved
+	if err := os.Truncate(w.path, 0); err != nil {
+		return err
+	}
+
+	// 3. Re-open the file for appending
+	var err error
+	w.file, err = os.OpenFile(w.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	return err
+}
+
 
 func (w *WAL) Append(key string, value []byte) error{
 	w.mu.Lock()
