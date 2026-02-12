@@ -1,6 +1,6 @@
 # Chill-DB ❄️
 
-![Go Version](https://img.shields.io/github/go-mod/go-version/Gliitchhh410/Chill-DB)
+![Go Version](https://img.shields.io/github/go-mod/go-version/Gliitchhh410/Chill-DB?filename=v2/go.mod)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 A custom-built Relational Database Management System (RDBMS) that has evolved from a **Bash-based Storage Engine** (v1) to a high-performance **LSM Tree implementation in pure Go** (v2).
