@@ -62,6 +62,45 @@ func (sst *SSTable) Search(searchkey string) ([]byte, bool, error) {
 	}
 }
 
+
+func (sst *SSTable) Scan() (map[string][]byte, error) {
+	data := make(map[string][]byte)
+
+	f, err := os.Open(sst.Filename)
+    if err != nil {
+        return nil, err
+    }
+	defer f.Close()
+
+	for {
+		var keyLen int32
+		var valLen int32
+
+		if err := binary.Read(f, binary.LittleEndian, &keyLen); err == io.EOF {
+			break // End of file, we are done
+		} else if err != nil {
+			return nil, err
+		}
+		if err := binary.Read(f, binary.LittleEndian, &valLen); err != nil {
+			return nil, err
+		}
+
+		keyBytes := make([]byte, int(keyLen))
+		valBytes := make([]byte, int(valLen))
+
+		if _, err := io.ReadFull(f, keyBytes); err != nil {
+			return nil, err
+		}
+		if _, err := io.ReadFull(f, valBytes); err != nil {
+			return nil, err
+		}
+
+		data[string(keyBytes)] = valBytes
+
+	}
+	return data, nil
+}
+
 func WriteSSTable(data map[string][]byte, filename string) (*SSTable, error){
 	keys := make([]string, 0, len(data))
 	for k := range data {
