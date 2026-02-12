@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"sort"
+	"sync"
 	"time"
 )
 
@@ -14,6 +15,8 @@ type LSMRepository struct {
 	memTable   *MemTable
 	wal        *WAL
 	storageDir string
+	sstables   []string     // Cache of active SSTable filenames (sorted Newest -> Oldest)
+	mu         sync.RWMutex // Protects sstables slice
 }
 
 func NewLSMRepository(storageDir string) (*LSMRepository, error) {
@@ -26,11 +29,31 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 		return nil, err
 	}
 
-	return &LSMRepository{
+	repo :=  &LSMRepository{
 		memTable:   NewMemTable(),
 		wal:        wal,
 		storageDir: storageDir,
-	}, nil
+		sstables:   []string{},
+	}
+	files, err := os.ReadDir(storageDir)
+	if err != nil {
+		return nil, err
+	}
+	var ssts []string
+	for _, f := range files {
+		if filepath.Ext(f.Name()) == ".db" {
+			ssts = append(ssts, filepath.Join(storageDir, f.Name()))
+		}
+	}
+
+	sort.Slice(ssts, func(i, j int) bool {
+		return ssts[i] > ssts[j]
+	})
+
+	repo.sstables = ssts
+	fmt.Printf("Loaded %d SSTables from disk.\n", len(repo.sstables))
+
+	return repo, nil
 }
 
 func (r *LSMRepository) InsertRow(tableName string, row domain.Row) error {
@@ -63,6 +86,14 @@ func (r *LSMRepository) Flush() error {
 		return err
 	}
 
+
+	r.mu.Lock()
+
+	// Prepend the new file (since it's the newest)
+    r.sstables = append([]string{filename}, r.sstables...)
+	r.mu.Unlock()
+
+	
 	r.memTable.data = make(map[string][]byte)
 	r.memTable.size = 0
 	if err := r.wal.Truncate(); err != nil {
@@ -87,34 +118,28 @@ func (r *LSMRepository) Query(tableName string, conditions string) ([]domain.Row
 	}
 	r.memTable.mu.RUnlock()
 	// check reading from sstable
-	files, err := os.ReadDir(r.storageDir)
-	if err != nil {
-		return nil, err
-	}
-	slices.Reverse(files) // reversing the files to check newest files first
+	r.mu.RLock()
+	activeFiles := make([]string, len(r.sstables))
+	copy(activeFiles, r.sstables)
+	r.mu.RUnlock()
 
-	for _, file := range files {
-		if filepath.Ext(file.Name()) != ".db" {
-			continue
+	for _, filename := range activeFiles {
+
+		sst := &SSTable{Filename: filename}
+		val, ok, err := sst.Search(key)
+
+		if err != nil {
+			return nil, err
 		}
-		if filepath.Ext(file.Name()) == ".db" {
-			fullPath := filepath.Join(r.storageDir, file.Name())
-			sst := &SSTable{Filename: fullPath}
-			val, ok, err := sst.Search(key)
 
-			if err != nil {
+		if ok {
+			var row domain.Row
+			if err := json.Unmarshal(val, &row); err != nil {
 				return nil, err
 			}
-
-			if ok {
-				var row domain.Row
-				if err := json.Unmarshal(val, &row); err != nil {
-					return nil, err
-				}
-				return []domain.Row{row}, nil
-			}
-
+			return []domain.Row{row}, nil
 		}
+
 	}
 	return []domain.Row{}, nil
 }
