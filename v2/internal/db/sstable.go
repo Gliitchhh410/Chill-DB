@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/binary"
+	"io"
 	"os"
 	"sort"
 )
@@ -11,6 +12,55 @@ type SSTable struct {
     // BloomFilter *BloomFilter // Future upgrade!
 }
 
+
+func (sst *SSTable) Search(searchkey string) ([]byte, bool, error) {
+	f, err := os.Open(sst.Filename)
+    if err != nil {
+        return nil, false, err
+    }
+    defer f.Close()
+
+	for {
+		var keyLen int32
+		var valLen int32
+
+		err := binary.Read(f, binary.LittleEndian, &keyLen)
+		if err == io.EOF {
+				return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+
+		err = binary.Read(f, binary.LittleEndian, &valLen)
+		if err != nil {
+			return nil, false, err
+		}
+
+		keyBytes := make([]byte, int(keyLen))
+		_, err = io.ReadFull(f, keyBytes)
+		if err != nil {
+			return nil, false, err
+		}
+
+		if string(keyBytes) == searchkey {
+			valBytes := make([]byte, int (valLen))
+			_, err = io.ReadFull(f, valBytes)
+			if err != nil {
+				return nil, false, err
+			}
+			return valBytes, true, nil
+		} else {
+			// NO MATCH - SKIP THE VALUE!
+			// We seek forward by valLen bytes from the current position
+			_, err = f.Seek(int64(valLen), io.SeekCurrent)
+			if err != nil {
+				return nil, false, err
+			}
+		}
+
+	}
+}
 
 func WriteSSTable(data map[string][]byte, filename string) (*SSTable, error){
 	keys := make([]string, 0, len(data))
@@ -44,5 +94,3 @@ func WriteSSTable(data map[string][]byte, filename string) (*SSTable, error){
 	return &SSTable{Filename: filename}, nil
 
 }
-
-
