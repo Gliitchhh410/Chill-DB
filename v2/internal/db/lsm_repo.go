@@ -103,7 +103,7 @@ func (r *LSMRepository) recoverFromWAL(walPath string) error {
 		}
 
 		//Put directly into MemTable
-		// We use the map directly to avoid writing to the WAL again!
+		// We use the map directly to avoid writing to the WAL again
 		r.memTable.Put(string(key), val)
 		loadedCount++
 	}
