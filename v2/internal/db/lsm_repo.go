@@ -2,8 +2,10 @@ package db
 
 import (
 	"chill-db/internal/domain"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -24,17 +26,25 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 		os.Mkdir(storageDir, 0755) // Use MkdirAll just in case
 	}
 
+	repo := &LSMRepository{
+		memTable:   NewMemTable(),
+		storageDir: storageDir,
+		sstables:   []string{},
+	}
+
+	walPath := storageDir + "/wal.log"
+	if _, err := os.Stat(walPath); err == nil {
+		fmt.Println("FYI: Found existing WAL. Attempting recovery...")
+		if err := repo.recoverFromWAL(walPath); err != nil {
+			return nil, fmt.Errorf("WAL recovery failed: %w", err)
+		}
+	}
+
 	wal, err := NewWAL(storageDir + "/wal.log")
 	if err != nil {
 		return nil, err
 	}
-
-	repo :=  &LSMRepository{
-		memTable:   NewMemTable(),
-		wal:        wal,
-		storageDir: storageDir,
-		sstables:   []string{},
-	}
+	repo.wal = wal
 	files, err := os.ReadDir(storageDir)
 	if err != nil {
 		return nil, err
@@ -54,6 +64,54 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	fmt.Printf("Loaded %d SSTables from disk.\n", len(repo.sstables))
 
 	return repo, nil
+}
+
+func (r *LSMRepository) recoverFromWAL(walPath string) error {
+
+	f, err := os.Open(walPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	var loadedCount int
+
+	for {
+		var keyLen int32
+		var valLen int32
+
+		// Read Key Length
+		if err := binary.Read(f, binary.LittleEndian, &keyLen); err == io.EOF {
+			break // Finished reading WAL
+		} else if err != nil {
+			return err
+		}
+
+		// Read Value Length
+		if err := binary.Read(f, binary.LittleEndian, &valLen); err != nil {
+			return err
+		}
+
+		//Read Data
+		key := make([]byte, keyLen)
+		val := make([]byte, valLen)
+		if _, err := io.ReadFull(f, key); err != nil {
+			return err
+		}
+		if _, err := io.ReadFull(f, val); err != nil {
+			return err
+		}
+
+		//Put directly into MemTable
+		// We use the map directly to avoid writing to the WAL again!
+		r.memTable.Put(string(key), val)
+		loadedCount++
+	}
+
+	if loadedCount > 0 {
+		fmt.Printf("🔄 Recovered %d records from WAL.\n", loadedCount)
+	}
+	return nil
 }
 
 func (r *LSMRepository) InsertRow(tableName string, row domain.Row) error {
@@ -86,14 +144,12 @@ func (r *LSMRepository) Flush() error {
 		return err
 	}
 
-
 	r.mu.Lock()
 
 	// Prepend the new file (since it's the newest)
-    r.sstables = append([]string{filename}, r.sstables...)
+	r.sstables = append([]string{filename}, r.sstables...)
 	r.mu.Unlock()
 
-	
 	r.memTable.data = make(map[string][]byte)
 	r.memTable.size = 0
 	if err := r.wal.Truncate(); err != nil {
