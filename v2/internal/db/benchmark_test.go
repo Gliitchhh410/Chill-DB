@@ -5,7 +5,7 @@ import (
 	"testing"
 	"chill-db/internal/domain"
 )
-
+// to run D:\DS\Chill-DB\v2\internal\db> go test -v -bench='.' -run='^$'
 func BenchmarkInsert(b *testing.B) {
 	dir := b.TempDir()
 	repo, _ := NewLSMRepository(dir)
