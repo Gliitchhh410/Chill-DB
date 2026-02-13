@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -30,17 +31,47 @@ func (r *LSMRepository) Compact() error {
 	r.mu.RUnlock()
 
 	fmt.Printf("🧹 Compacting %d files...\n", len(oldFiles))
+	// results[0] will hold the map from oldFiles[0], etc.
+	results := make([]map[string][]byte, len(oldFiles))
+	// Buffered channel to prevent goroutines from blocking if multiple errors occur
+	errChan := make(chan error, len(oldFiles))
 
-	// Merge: Read all files into a map
-	// Iterate REVERSE (Oldest -> Newest) so newer keys overwrite older ones
+	var wg sync.WaitGroup
+	for i, filename := range oldFiles {
+		wg.Add(1)
+		// We pass 'i' and 'filename' to capture them by value
+		go func(index int, fname string) {
+			defer wg.Done()
+			// Create a temporary SSTable struct
+			sst := &SSTable{Filename: fname}
+			// Call Scan() to get the data
+			data, err := sst.Scan()
+			if err != nil {
+				errChan <- fmt.Errorf("failed to scan %s: %w", fname, err)
+				return
+			}
+			// Store data in the specific index for this file
+			results[index] = data
+		}(i, filename)
+	}
+
+	wg.Wait()
+	close(errChan)
+	if len(errChan) > 0 {
+		return <-errChan
+	}
+
+	// Iterate BACKWARDS (Oldest File -> Newest File)
+	// This ensures that if a key exists in both 'old' and 'new' files,
+	// the value from the 'new' file (processed later) overwrites the 'old' one.
 	mergedData := make(map[string][]byte)
-	for i := len(oldFiles) - 1; i >= 0; i-- {
-		sst := &SSTable{Filename: oldFiles[i]}
-		data, err := sst.Scan() // Ensure you added Scan() to sstable.go!
-		if err != nil {
-			return err
+	for i := len(results) - 1; i >= 0; i-- {
+		fileData := results[i]
+		if fileData == nil {
+			continue
 		}
-		for k, v := range data {
+		// Loop through fileData and put every k,v into mergedData
+		for k, v := range fileData {
 			mergedData[k] = v
 		}
 	}
@@ -53,18 +84,26 @@ func (r *LSMRepository) Compact() error {
 
 	//Swap: Update the active list atomically
 	r.mu.Lock()
+	
+	// Calculate how many NEW files arrived during the compaction
+
 	newFilesCount := len(r.sstables) - len(oldFiles)
+	// Build the new list
 	newSSTables := make([]string, 0)
 	if newFilesCount > 0 {
-        newSSTables = append(newSSTables, r.sstables[:newFilesCount]...)
-    }
-	newSSTables = append(newSSTables, newFilename)
+		// Keep the new files!
+		newSSTables = append(newSSTables, newFilename)
+	}
+	// Append our new compacted file
+	newSSTables = append(newSSTables, r.sstables[len(oldFiles):]...)
+	// Update the pointer
 	r.sstables = newSSTables
+
 	r.mu.Unlock()
 
 	//Cleanup: Delete old files (Delayed for safety)
 	go func() {
-		time.Sleep(10 * time.Second) // Wait for pending queries to finish
+		time.Sleep(5 * time.Second)
 		for _, f := range oldFiles {
 			os.Remove(f)
 		}
