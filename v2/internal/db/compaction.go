@@ -30,7 +30,6 @@ func (r *LSMRepository) Compact() error {
 	copy(oldFiles, r.sstables)
 	r.mu.RUnlock()
 
-	fmt.Printf("🧹 Compacting %d files...\n", len(oldFiles))
 	// results[0] will hold the map from oldFiles[0], etc.
 	results := make([]map[string][]byte, len(oldFiles))
 	// Buffered channel to prevent goroutines from blocking if multiple errors occur
@@ -84,7 +83,7 @@ func (r *LSMRepository) Compact() error {
 
 	//Swap: Update the active list atomically
 	r.mu.Lock()
-	
+
 	// Calculate how many NEW files arrived during the compaction
 
 	newFilesCount := len(r.sstables) - len(oldFiles)
@@ -107,7 +106,6 @@ func (r *LSMRepository) Compact() error {
 		for _, f := range oldFiles {
 			os.Remove(f)
 		}
-		fmt.Println(" Old SSTables deleted.")
 	}()
 
 	return nil

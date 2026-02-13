@@ -61,8 +61,6 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	})
 
 	repo.sstables = ssts
-	fmt.Printf("Loaded %d SSTables from disk.\n", len(repo.sstables))
-
 	return repo, nil
 }
 func (r *LSMRepository) Close() error {
