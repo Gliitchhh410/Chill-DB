@@ -65,7 +65,9 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 
 	return repo, nil
 }
-
+func (r *LSMRepository) Close() error {
+    return r.wal.Close()
+}
 func (r *LSMRepository) recoverFromWAL(walPath string) error {
 
 	f, err := os.Open(walPath)

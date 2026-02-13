@@ -6,14 +6,14 @@ import (
 	"sync"
 )
 
-// Before we touch the MemTable, we write the operation to a file on disk. 
+// Before we touch the MemTable, we write the operation to a file on disk.
 // Speed: We only append to the end of the file. Appending is extremely fast (almost as fast as RAM) because the disk head doesn't have to jump around.
 // Recovery: If we crash, we just read this file from top to bottom on restart to rebuild the MemTable.
 
 type WAL struct {
 	file *os.File
 	path string
-	mu sync.Mutex
+	mu   sync.Mutex
 }
 
 func NewWAL(path string) (*WAL, error) {
@@ -45,8 +45,7 @@ func (w *WAL) Truncate() error {
 	return err
 }
 
-
-func (w *WAL) Append(key string, value []byte) error{
+func (w *WAL) Append(key string, value []byte) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -66,12 +65,12 @@ func (w *WAL) Append(key string, value []byte) error{
 	if err != nil {
 		return err
 	}
-	w.file.Sync()	
+	w.file.Sync()
 	return nil
 }
 
 func (w *WAL) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
 	return w.file.Close()
 }
-
-
