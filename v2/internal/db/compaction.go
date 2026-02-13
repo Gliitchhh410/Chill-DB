@@ -26,32 +26,29 @@ func (r *LSMRepository) Compact() error {
 		return nil // Nothing to do
 	}
 	// Copy the list so we can work without blocking queries
-	oldFiles := make([]string, len(r.sstables))
-	copy(oldFiles, r.sstables)
+	oldTables := make([]*SSTable, len(r.sstables))
+	copy(oldTables, r.sstables)
 	r.mu.RUnlock()
 
 	// results[0] will hold the map from oldFiles[0], etc.
-	results := make([]map[string][]byte, len(oldFiles))
+	results := make([]map[string][]byte, len(oldTables))
 	// Buffered channel to prevent goroutines from blocking if multiple errors occur
-	errChan := make(chan error, len(oldFiles))
+	errChan := make(chan error, len(oldTables))
 
 	var wg sync.WaitGroup
-	for i, filename := range oldFiles {
+	for i, table := range oldTables {
 		wg.Add(1)
 		// We pass 'i' and 'filename' to capture them by value
-		go func(index int, fname string) {
+		go func(index int, sst *SSTable) {
 			defer wg.Done()
 			// Create a temporary SSTable struct
-			sst := &SSTable{Filename: fname}
-			// Call Scan() to get the data
 			data, err := sst.Scan()
 			if err != nil {
-				errChan <- fmt.Errorf("failed to scan %s: %w", fname, err)
+				errChan <- fmt.Errorf("failed to scan %s: %w", sst.Filename, err)
 				return
 			}
-			// Store data in the specific index for this file
 			results[index] = data
-		}(i, filename)
+		}(i, table)
 	}
 
 	wg.Wait()
@@ -77,7 +74,8 @@ func (r *LSMRepository) Compact() error {
 
 	//  Write: Create the new compacted file
 	newFilename := fmt.Sprintf("%s/compacted_%d.db", r.storageDir, time.Now().UnixNano())
-	if _, err := WriteSSTable(mergedData, newFilename); err != nil {
+	newSST, err := WriteSSTable(mergedData, newFilename)
+	if err != nil {
 		return err
 	}
 
@@ -86,25 +84,25 @@ func (r *LSMRepository) Compact() error {
 
 	// Calculate how many NEW files arrived during the compaction
 
-	newFilesCount := len(r.sstables) - len(oldFiles)
+	newFilesCount := len(r.sstables) - len(oldTables)
 	// Build the new list
-	newSSTables := make([]string, 0)
+	newSSTablesList := make([]*SSTable, 0)
 	if newFilesCount > 0 {
 		// Keep the new files!
-		newSSTables = append(newSSTables, newFilename)
+		newSSTablesList = append(newSSTablesList, r.sstables[:newFilesCount]...)
 	}
 	// Append our new compacted file
-	newSSTables = append(newSSTables, r.sstables[len(oldFiles):]...)
+	newSSTablesList = append(newSSTablesList, newSST)
 	// Update the pointer
-	r.sstables = newSSTables
+	r.sstables = newSSTablesList
 
 	r.mu.Unlock()
 
 	//Cleanup: Delete old files (Delayed for safety)
 	go func() {
 		time.Sleep(5 * time.Second)
-		for _, f := range oldFiles {
-			os.Remove(f)
+		for _, t := range oldTables {
+			os.Remove(t.Filename)
 		}
 	}()
 

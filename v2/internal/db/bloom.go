@@ -30,7 +30,7 @@ func (bf *BloomFilter) Add(key string) {
 	for i := uint64(0); i < bf.hashCount; i++ {
 		// SIMPLIFIED HASHING:
 		// Just add 'i' to the hash to get a "new" position
-		position := (h + i) % bf.size
+		position := (h + (i * 0x9e3779b9)) % bf.size
 		byteIndex := position / 8
 		bitIndex := position % 8
 		// Turn ON the specific bit using bitwise OR (|)
@@ -43,7 +43,7 @@ func (bf *BloomFilter) Add(key string) {
 func (bf *BloomFilter) Contains(key []byte) bool {
 	h1 := hash(string(key))
 	for i := uint64(0); i < bf.hashCount; i++ {
-		pos := (h1 + i) % bf.size
+		pos := (h1 + (i * 0x9e3779b9)) % bf.size
 		byteIndex := pos / 8
 		bitIndex := pos % 8
 		// Check if the bit is OFF

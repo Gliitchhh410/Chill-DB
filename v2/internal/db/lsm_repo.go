@@ -17,7 +17,7 @@ type LSMRepository struct {
 	memTable   *MemTable
 	wal        *WAL
 	storageDir string
-	sstables   []string     // Cache of active SSTable filenames (sorted Newest -> Oldest)
+	sstables   []*SSTable   // Cache of active SSTable filenames (sorted Newest -> Oldest)
 	mu         sync.RWMutex // Protects sstables slice
 }
 
@@ -29,7 +29,7 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	repo := &LSMRepository{
 		memTable:   NewMemTable(),
 		storageDir: storageDir,
-		sstables:   []string{},
+		sstables:   []*SSTable{},
 	}
 
 	walPath := storageDir + "/wal.log"
@@ -49,22 +49,25 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ssts []string
+	var loadedSSTs []*SSTable
 	for _, f := range files {
 		if filepath.Ext(f.Name()) == ".db" {
-			ssts = append(ssts, filepath.Join(storageDir, f.Name()))
+			fullPath := filepath.Join(storageDir, f.Name())
+			sst := &SSTable{Filename: fullPath}
+			_ = sst.LoadFilter()
+			loadedSSTs = append(loadedSSTs, sst)
 		}
 	}
 
-	sort.Slice(ssts, func(i, j int) bool {
-		return ssts[i] > ssts[j]
+	sort.Slice(loadedSSTs, func(i, j int) bool {
+		return loadedSSTs[i].Filename > loadedSSTs[j].Filename
 	})
 
-	repo.sstables = ssts
+	repo.sstables = loadedSSTs
 	return repo, nil
 }
 func (r *LSMRepository) Close() error {
-    return r.wal.Close()
+	return r.wal.Close()
 }
 func (r *LSMRepository) recoverFromWAL(walPath string) error {
 
@@ -139,15 +142,30 @@ func (r *LSMRepository) Flush() error {
 	}
 
 	filename := fmt.Sprintf("%s/sst_%d.db", r.storageDir, time.Now().UnixNano())
-	_, err := WriteSSTable(r.memTable.data, filename)
+	newSST, err := WriteSSTable(r.memTable.data, filename)
 	if err != nil {
 		return err
+	}
+	if newSST.Filter == nil {
+		fmt.Printf("⚠️ WriteSSTable didn't return a filter for %s. Attempting to load...\n", filename)
+
+		// Force load and CHECK THE ERROR
+		if err := newSST.LoadFilter(); err != nil {
+			fmt.Printf("❌ LoadFilter FAILED: %v\n", err)
+			return fmt.Errorf("failed to load filter: %w", err)
+		}
+
+		if newSST.Filter == nil {
+			fmt.Printf("❌ Filter is STILL nil after loading!\n")
+		} else {
+			fmt.Printf("✅ Filter loaded successfully from disk.\n")
+		}
 	}
 
 	r.mu.Lock()
 
 	// Prepend the new file (since it's the newest)
-	r.sstables = append([]string{filename}, r.sstables...)
+	r.sstables = append([]*SSTable{newSST}, r.sstables...)
 	r.mu.Unlock()
 
 	r.memTable.data = make(map[string][]byte)
@@ -175,20 +193,29 @@ func (r *LSMRepository) Query(tableName string, conditions string) ([]domain.Row
 	r.memTable.mu.RUnlock()
 	// check reading from sstable
 	r.mu.RLock()
-	activeFiles := make([]string, len(r.sstables))
+	activeFiles := make([]*SSTable, len(r.sstables))
 	copy(activeFiles, r.sstables)
 	r.mu.RUnlock()
 
-	for _, filename := range activeFiles {
+	for _, sst := range activeFiles {
+		if sst.Filter == nil {
+			fmt.Printf("⚠️ WARNING: Filter is NIL for %s\n", sst.Filename)
+		} else {
+			// DEBUG: Check what the filter says
+			isPresent := sst.Filter.Contains([]byte(key))
+			// fmt.Printf("DEBUG: Filter check for %s in %s: %v\n", key, sst.Filename, isPresent)
 
-		sst := &SSTable{Filename: filename}
-		val, ok, err := sst.Search(key)
+			if !isPresent {
+				continue // Optimization working!
+			}
+		}
+		val, found, err := sst.Search(key)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if ok {
+		if found {
 			var row domain.Row
 			if err := json.Unmarshal(val, &row); err != nil {
 				return nil, err
