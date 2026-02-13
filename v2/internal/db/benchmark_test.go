@@ -69,8 +69,7 @@ func BenchmarkQuery(b *testing.B) {
 		b.ReportMetric(float64(b.N)/elapsed.Seconds(), "reads/sec")
 	})
 
-	// SCENARIO 2: MISSES (Bloom Filter says "No")
-	// These should be INSTANT (~0.01ms) because they skip disk I/O entirely.
+	//  MISSES (Bloom Filter says "No")
 	b.Run("Misses", func(b *testing.B) {
 		start := time.Now()
 		for i := 0; i < b.N; i++ {

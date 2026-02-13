@@ -1,16 +1,23 @@
 package db
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"io"
 	"os"
 	"sort"
 )
 
+type IndexEntry struct {
+	Key    string
+	Offset int64
+}
+
 type SSTable struct {
 	Filename string
 	Filter   *BloomFilter
-	// BloomFilter *BloomFilter // Future upgrade!
+	Index    []IndexEntry
 }
 
 func (sst *SSTable) LoadFilter() error {
@@ -73,72 +80,65 @@ func (sst *SSTable) Search(searchkey string) ([]byte, bool, error) {
 	}
 	defer f.Close()
 
-
 	stat, _ := f.Stat()
 	fileSize := stat.Size()
 	dataEnd := fileSize
-	if fileSize > 8 {
-		f.Seek(-8, io.SeekEnd)
-		var filterLen uint64
-		if err := binary.Read(f, binary.LittleEndian, &filterLen); err == nil {
-			dataEnd = fileSize - 8 - int64(filterLen)
-		}
-		f.Seek(0, io.SeekStart) // Rewind to start after checking footer
+	if fileSize > 16 {
+		f.Seek(-16, io.SeekEnd)
+		var filterLen, indexLen uint64
+		binary.Read(f, binary.LittleEndian, &filterLen)
+		binary.Read(f, binary.LittleEndian, &indexLen)
+		dataEnd = fileSize - 16 - int64(filterLen) - int64(indexLen)
 	}
 
+	var startOffset int64 = 0
+	// Index Lookup: Jump to the closest offset
+	if len(sst.Index) > 0 {
+		idx := sort.Search(len(sst.Index), func(i int) bool {
+			return sst.Index[i].Key > searchkey
+		})
+		if idx > 0 {
+			startOffset = sst.Index[idx-1].Offset
+		}
+	}
+	f.Seek(startOffset, io.SeekStart)
 
 	for {
-
 		currentPos, _ := f.Seek(0, io.SeekCurrent)
 		if currentPos >= dataEnd {
 			break
 		}
 
-		var keyLen int32
-		var valLen int32
-
-		err := binary.Read(f, binary.LittleEndian, &keyLen)
-		if err == io.EOF {
-			return nil, false, nil
-		}
-		if err != nil {
-			return nil, false, err
-		}
-
-		err = binary.Read(f, binary.LittleEndian, &valLen)
-		if err != nil {
-			return nil, false, err
-		}
-
-		if int64(keyLen) + currentPos > dataEnd {
+		var keyLen, valLen int32
+		if err := binary.Read(f, binary.LittleEndian, &keyLen); err != nil {
 			break
 		}
-		
-		keyBytes := make([]byte, int(keyLen))
-		_, err = io.ReadFull(f, keyBytes)
-		if err != nil {
-			return nil, false, err
+		if err := binary.Read(f, binary.LittleEndian, &valLen); err != nil {
+			break
 		}
 
-		if string(keyBytes) == searchkey {
-			valBytes := make([]byte, int(valLen))
-			_, err = io.ReadFull(f, valBytes)
-			if err != nil {
-				return nil, false, err
-			}
-			return valBytes, true, nil
-		} else {
-			// NO MATCH - SKIP THE VALUE!
-			// We seek forward by valLen bytes from the current position
-			_, err = f.Seek(int64(valLen), io.SeekCurrent)
-			if err != nil {
-				return nil, false, err
-			}
+		keyBytes := make([]byte, int(keyLen))
+		if _, err := io.ReadFull(f, keyBytes); err != nil {
+			break
 		}
+		keyStr := string(keyBytes)
+
+		// Optimization: Since SSTable is sorted, if we pass the key, it's not here
+		if keyStr > searchkey {
+			return nil, false, nil
+		}
+
+		if keyStr == searchkey {
+			valBytes := make([]byte, int(valLen))
+			io.ReadFull(f, valBytes)
+			return valBytes, true, nil
+		}
+
+		// Skip value to next record
+		f.Seek(int64(valLen), io.SeekCurrent)
 	}
 	return nil, false, nil
 }
-
 
 func (sst *SSTable) Scan() (map[string][]byte, error) {
 	f, err := os.Open(sst.Filename)
@@ -222,52 +222,114 @@ func WriteSSTable(data map[string][]byte, filename string) (*SSTable, error) {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
+
 	f, err := os.Create(filename)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	// Rule of thumb: Size = NumKeys * 10 (gives ~1% false positive rate)
-	// HashCount = 7 (optimal for size*10)
+	var index []IndexEntry
 	bf := NewBloomFilter(uint64(len(keys)*10), 7)
-	for _, k := range keys {
+	currentOffset := int64(0)
+
+	for i, k := range keys {
 		val := data[k]
+
+		// 1. Update Index: Every 100 keys, record the offset
+		if i%100 == 0 {
+			index = append(index, IndexEntry{Key: k, Offset: currentOffset})
+		}
+
+		// 2. Update Bloom Filter
 		bf.Add(k)
-		// Write Key Len (int32)
-		if err := binary.Write(f, binary.LittleEndian, int32(len(k))); err != nil {
-			return nil, err
-		}
-		// Write Val Len (int32)
-		if err := binary.Write(f, binary.LittleEndian, int32(len(val))); err != nil {
-			return nil, err
-		}
-		// Write Key Bytes
-		if _, err := f.WriteString(k); err != nil {
-			return nil, err
-		}
-		// Write Val Bytes
-		if _, err := f.Write(val); err != nil {
-			return nil, err
-		}
 
+		// 3. Write Data
+		keyLen := int32(len(k))
+		valLen := int32(len(val))
+
+		binary.Write(f, binary.LittleEndian, keyLen)
+		binary.Write(f, binary.LittleEndian, valLen)
+		f.WriteString(k)
+		f.Write(val)
+
+		// 4. Track Offset: 4+4 bytes for lengths + actual data
+		currentOffset += int64(8 + keyLen + valLen)
 	}
-	// Write Bloom Filter to the END of the file
+
+	// Write Bloom Filter and Footer (Same as your logic)
 	bfData := bf.Encode()
-	// Write the length of the filter first
-	if _, err := f.Write(bfData); err != nil {
-		return nil, err
+	indexData, _ := EncodeIndex(index)
+	f.Write(bfData)
+	f.Write(indexData)
+	binary.Write(f, binary.LittleEndian, uint64(len(bfData)))
+	binary.Write(f, binary.LittleEndian, uint64(len(indexData)))
+
+	f.Sync()
+
+	return &SSTable{
+		Filename: filename,
+		Filter:   bf,
+		Index:    index, // Now properly populated!
+	}, nil
+}
+
+func (sst *SSTable) LoadMetadata() error {
+	f, err := os.Open(sst.Filename)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	stat, _ := f.Stat()
+	size := stat.Size()
+	if size < 16 {
+		return nil
+	} // Too small for metadata
+
+	// 1. Read the two lengths from the very end
+	f.Seek(-16, io.SeekEnd)
+	var filterLen, indexLen uint64
+	binary.Read(f, binary.LittleEndian, &filterLen)
+	binary.Read(f, binary.LittleEndian, &indexLen)
+
+	// 2. Load Filter
+	// Offset calculation: TotalSize - Footer(16) - IndexLen - FilterLen
+	filterOffset := size - 16 - int64(indexLen) - int64(filterLen)
+	f.Seek(filterOffset, io.SeekStart)
+	filterData := make([]byte, filterLen)
+	f.Read(filterData)
+	sst.Filter = DecodeBloomFilter(filterData)
+
+	// 3. Load Index
+	// The index starts right after the filter
+	indexData := make([]byte, indexLen)
+	f.Read(indexData)
+	sst.Index, err = DecodeIndex(indexData) // Use a simple decoder (like JSON or binary)
+	if err != nil {
+		return err
 	}
 
-	// Write the filter itself
-	if err := binary.Write(f, binary.LittleEndian, uint64(len(bfData))); err != nil {
+	return nil
+}
+
+func EncodeIndex(index []IndexEntry) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(index)
+	if err != nil {
 		return nil, err
 	}
+	return buf.Bytes(), nil
+}
 
-	if err := f.Sync(); err != nil {
+func DecodeIndex(data []byte) ([]IndexEntry, error) {
+	var index []IndexEntry
+	buf := bytes.NewBuffer(data)
+	dec := gob.NewDecoder(buf)
+	err := dec.Decode(&index)
+	if err != nil {
 		return nil, err
 	}
-
-	return &SSTable{Filename: filename, Filter: bf}, nil
-
+	return index, nil
 }

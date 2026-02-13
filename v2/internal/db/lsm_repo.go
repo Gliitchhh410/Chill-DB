@@ -54,7 +54,9 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 		if filepath.Ext(f.Name()) == ".db" {
 			fullPath := filepath.Join(storageDir, f.Name())
 			sst := &SSTable{Filename: fullPath}
-			_ = sst.LoadFilter()
+			if err := sst.LoadMetadata(); err != nil {
+            fmt.Printf("❌ Failed to load metadata for %s: %v\n", f.Name(), err)
+        	}
 			loadedSSTs = append(loadedSSTs, sst)
 		}
 	}
@@ -66,6 +68,8 @@ func NewLSMRepository(storageDir string) (*LSMRepository, error) {
 	repo.sstables = loadedSSTs
 	return repo, nil
 }
+
+
 func (r *LSMRepository) Close() error {
 	return r.wal.Close()
 }
