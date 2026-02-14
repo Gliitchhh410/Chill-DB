@@ -2,7 +2,6 @@
 
 ![Go Version](https://img.shields.io/github/go-mod/go-version/Gliitchhh410/Chill-DB?filename=v2/go.mod)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 
 **From Bash Scripts to Byte Slices: A journey into Database Internals.**
 
