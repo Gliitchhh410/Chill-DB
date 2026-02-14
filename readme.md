@@ -2,102 +2,73 @@
 
 ![Go Version](https://img.shields.io/github/go-mod/go-version/Gliitchhh410/Chill-DB?filename=v2/go.mod)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 
-A custom-built Relational Database Management System (RDBMS) that has evolved from a **Bash-based Storage Engine** (v1) to a high-performance **LSM Tree implementation in pure Go** (v2).
+**From Bash Scripts to Byte Slices: A journey into Database Internals.**
 
-**Tech Stack:** Go (Golang), Bash Scripting, Vanilla JS, Tailwind CSS.
+Chill-DB is a custom database project that evolved from a **process-based orchestrator (v1)** into a high-performance **embedded LSM-tree storage engine (v2)**.
 
-## 🚀 Why I Built This
+---
 
-I wanted to understand databases at a low level—not just how to use them, but how they work under the hood. I built `Chill-DB` to explore:
+## 🔄 The Evolution Story
 
-- **Lexing & Parsing:** Writing a custom SQL engine to understand `SELECT`, `UPDATE`, `INSERT`, `DELETE`.
-- **Systems Programming:** Using Bash for raw file manipulation and storage efficiency.
-- **Full Stack Integration:** connecting a low-level backend to a modern frontend via REST API.
+This project represents my transition from **Full-Stack/DevOps integration** to **Low-Level Systems Engineering**.
 
-## 🔄 Evolution: v1 vs v2
+| Feature | **v1: The Prototype** (Legacy) | **v2: The Engine** (Current) |
+| :--- | :--- | :--- |
+| **Architecture** | **Process Orchestrator** | **Embedded Library** |
+| **Language** | Go (API) + Bash (Storage) + JS (UI) | Pure Go (100%) |
+| **Storage Model** | Flat Files & Directories | LSM Tree (Log-Structured Merge-tree) |
+| **Query Engine** | Regex Parsing -> `awk`/`sed` | Binary Search + Bloom Filters |
+| **Durability** | File System Reliability | Write-Ahead Log (WAL) + `fsync` |
+| **Latency** | ~10-50ms (Process Overhead) | **~0.6ms** (Direct System Calls) |
 
-The project is divided into two distinct versions, showcasing the learning journey:
+---
 
-### v1: The Prototype (Bash-based)
+## 🛠 Chill-DB v1: The Full-Stack Prototype ([Video Demo](https://drive.google.com/file/d/1WimzsQ70XHQ0gvdck6OUQXkmCfv_nbxA/view?usp=sharing))
 
-- **Storage:** Relied on Bash scripts (`awk`, `sed`) for file manipulation.
-- **Concurrency:** Limited by file locking.
-- **Format:** Flat CSV files.
+**v1** was developed as a final project for the **Bash Scripting Course** at **ITI**. It demonstrates how to use the Linux Operating System *as* a database by orchestrating processes.
 
-### v2: The Rewrite (Pure Go + LSM)
+### 🏗 Architecture (v1)
+1.  **Frontend:** A JavaScript/Tailwind dashboard for executing SQL.
+2.  **Middleware (Go):**
+    * **Regex SQL Parser:** Tokenizes `SELECT`, `INSERT`, `UPDATE` queries.
+    * **Process Forking:** Uses `exec.Command` to spawn Bash scripts.
+3.  **Storage (Bash):**
+    * Uses `awk` and `sed` for projection and selection.
+    * Manages data/metadata directories.
 
-- **Storage:** Implements **LSM Trees** (Log-Structured Merge Trees) for high write throughput.
-- **Durability:** Uses a **Write Ahead Log (WAL)** to ensure data safety on crash.
-- **Performance:** In-memory **MemTable** buffering and binary storage.
-- **Cross-Platform:** Runs natively on Windows, Linux, and macOS without WSL.
+### ⚡ v1 Features
+* ✅ **SQL Engine:** Supports `SELECT`, `INSERT`, `UPDATE`, `DELETE`.
+* ✅ **Complex Queries:** Handles `WHERE` clauses and Column Projections via Regex.
+* ✅ **Interactive UI:** Visualizes data in responsive grids.
 
-## 🛠 Architecture (v1)
+## 🚀 Chill-DB v2: The High-Performance Engine
 
-The v1 system follows a 3-tier architecture:
+**v2** is a complete rewrite focusing on **Performance**, **Durability**, and **Memory Efficiency**. It drops the UI and shell scripts to function as a raw, embedded key-value store similar to LevelDB or RocksDB.
 
-1.  **The Frontend (Client):**
-    - A JavaScript/Tailwind dashboard that sends SQL commands via JSON.
-    - Visualizes data in responsive grids.
-2.  **The Middleware (Go Server):**
-    - Listens on port `8080`.
-    - **SQL Parser:** Uses Regex and String Tokenizing to break down queries (e.g., extracting `WHERE` clauses).
-    - **Orchestrator:** Validates syntax and spawns system processes.
+### ⚙️ Technical Architecture
+v2 implements a classic LSM-Tree architecture to optimize for high write throughput:
+1.  **WAL (Write-Ahead Log):** Every write is appended to a binary log file first to ensure **ACID durability** in case of a crash.
+2.  **MemTable:** Data is written to an in-memory balanced structure for speed.
+3.  **SSTables:** When memory is full, data is flushed to immutable **Sorted String Tables** on disk.
+4.  **Bloom Filter:** A probabilistic data structure sits in front of disk reads to instantly reject requests for non-existent keys (eliminating unnecessary I/O).
 
-3.  **The Storage Engine (Bash):**
-    - Handles the physical data layer (`.data` and `.meta` files).
-    - Implements **Projection** (selecting columns) and **Selection** (filtering rows) using `awk` stream processing.
-    - Ensures data integrity with atomic file moves.
+### 📊 v2 Benchmarks (Intel i7-10750H)
+The shift to binary I/O and algorithmic optimization resulted in massive gains:
 
-## 📡 API Reference (v2)
+| Metric | Time / Op | Improvement vs v1 | Implementation Detail |
+| :--- | :--- | :--- | :--- |
+| **Inserts** | **0.6 ms** | — | Optimized zero-allocation write path (<10 allocs/op). |
+| **Query (Hit)** | **0.71 ms** | **80% Faster** | **Binary Search** over linear file scans. |
+| **Query (Miss)**| **0.18 ms** | **94% Faster** | **Bloom Filters** prevent disk access on misses. |
+| **Compaction** | **63 ms** | **66% Faster** | Concurrent background merging of SSTables. |
 
-Chill-DB v2 exposes a REST API for programmatic access. Note that v2 consolidates table operations into the SQL engine.
+### 📦 v2 Installation & Usage
+Chill-DB v2 is designed to be imported as a Go library.
 
-| Method | Endpoint           | Description       | Body                                        |
-| :----- | :----------------- | :---------------- | :------------------------------------------ |
-| `POST` | `/database/create` | Create a new DB   | `{"name": "mydb"}`                          |
-| `POST` | `/sql`             | Execute SQL Query | `{"db_name": "mydb", "query": "SELECT..."}` |
-| `GET`  | `/databases`       | List databases    | None                                        |
-
-## ⚡ Features
-
-- ✅ **SQL Engine:** Supports `SELECT`, `INSERT`, `UPDATE`, `DELETE`.
-- ✅ **Complex Queries:** Handles `WHERE` clauses and Column Projections.
-- ✅ **Data Persistence:** Custom file-based storage format.
-- ✅ **Interactive UI:** A CLI-style web interface for executing commands.
-
-## 🔧 Installation & Usage
-
-1. **Clone the repo**
-
-   ```bash
-   git clone https://github.com/Gliitchhh410/Chill-DB.git
-
-   cd Chill-DB
-   ```
-
-2. **Start The Engine**
-
-   ```bash
-   go run .
-   ```
-
-3. **Open The Dashboard**
-
-   Navigate to `http://localhost:8080` in your browser.
-
-4. **Run a Query**
-
-```SQL
--- Create a new user
-INSERT INTO users VALUES (1, 'Ahmed', 'Admin')
-
--- Update user role
-UPDATE users SET role='SuperUser' WHERE id=1
-
--- Select specific columns
-SELECT name, role FROM users WHERE name='Ahmed'
-
--- Delete the user
-DELETE FROM users WHERE id=1
+```bash
+go get [github.com/Gliitchhh410/chill-db](https://github.com/Gliitchhh410/chill-db)
 ```
+
+

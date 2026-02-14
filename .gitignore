@@ -8,3 +8,5 @@ main
 *.tmp
 *.lock
 data_test/
+data_crash/
+data_bench/
