@@ -30,6 +30,8 @@ This project represents my transition from **Full-Stack/DevOps integration** to 
 
 ### 🏗 Architecture (v1)
 
+<img height="1605" alt="v1Arch" src="https://github.com/user-attachments/assets/fda5a3f7-8381-41b1-9fe4-82cce1d72118" />
+
 1.  **Frontend:** A JavaScript/Tailwind dashboard for executing SQL.
 2.  **Middleware (Go):**
     - **Regex SQL Parser:** Tokenizes `SELECT`, `INSERT`, `UPDATE` queries.
@@ -47,6 +49,9 @@ This project represents my transition from **Full-Stack/DevOps integration** to 
 ## 🚀 Chill-DB v2: The High-Performance Engine
 
 **v2** is a complete rewrite focusing on **Performance**, **Durability**, and **Memory Efficiency**. It drops the UI and shell scripts to function as a raw, embedded key-value store similar to LevelDB or RocksDB.
+
+<img width="2816" height="1536" alt="v2Arch" src="https://github.com/user-attachments/assets/5081aa0a-42c8-43a7-b493-9dcc96fe8a36" />
+
 
 ### ⚙️ Technical Architecture
 
